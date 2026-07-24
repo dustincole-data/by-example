@@ -10,7 +10,7 @@ Reference impls ported (not redesigned) from `.scratch/teach-a-machine/assets/` 
 | 1 · Scaffold + shell | ✅ Astro static, Node 22, default `outDir`, `site=byexample.dustincoledata.com`, tokens/global CSS, self-hosted fonts |
 | 2 · Instrument end-to-end | ✅ engine + field + net + curve + readouts, verified live in-browser |
 | 3 · On-ramp + sandbox | ✅ 3 beats → thesis → sandbox, 4 presets, keyboard + reduced-motion |
-| 4 · Ship | ⏳ built + committed locally; **GitHub repo + Vercel + DNS not yet done** (awaiting go) |
+| 4 · Ship | 🟡 repo pushed + Vercel deployed + domain attached & verified; **one DNS record left (manual, Namecheap)** |
 
 ## The two required deletions (done + regression-tested)
 
@@ -60,12 +60,29 @@ arc bug: verbatim review passed, the picture did not. Fixed by bumping a `modelG
   restore more dim midband), but that reopens the ticket-01 lock so I left it alone.
 - The `TRAINING CURVE` panel tag overlaps the 100% gridline at narrow panel widths. Present in the reference too.
 
-## Deploy — remaining (Phase 4)
+## Deploy — status
 
-1. Create public repo `github.com/dustincole-data/by-example`, push `main`.
-2. Vercel: import repo, Node 22, framework Astro, 100% static. Do **not** proxy through the main site.
-3. DNS: CNAME `byexample` → Vercel. (Namesake/WAM gotcha: if the cert stalls, remove + re-add the domain via the API.)
-4. Live-verify: on-ramp beats, train loop, presets, reduced-motion, OG unfurl.
+Done:
+1. ✅ Public repo `github.com/dustincole-data/by-example`, `main` pushed.
+2. ✅ Vercel project `by-example` created, **GitHub-connected** (auto-deploy on push), Node 22 pinned via
+   `engines` in package.json. Static, own project — not proxied through the main site.
+3. ✅ Production deploy live at `https://by-example.vercel.app` (public, not protected).
+   Verified on the real deployment: all 3 beats, snap **1362 ms**, thesis, hand-off, all 4 presets 1.00,
+   lr revealed 1.50, self-hosted fonts loaded, `og.png` + `favicon.svg` 200.
+4. ✅ `byexample.dustincoledata.com` attached to the project, ownership **verified**.
+
+**Remaining — one manual DNS record.** DNS for dustincoledata.com is at **Namecheap**
+(`dns1/dns2.registrar-servers.com`), managed by hand — no API credentials on this machine.
+In Namecheap → Advanced DNS → Add New Record:
+
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| CNAME | `byexample` | `5cb37e940a8d52f5.vercel-dns-017.com.` | Automatic |
+
+(Matches the sibling pattern — `moves.dustincoledata.com` resolves through `d90d5b329ae0d868.vercel-dns-017.com`.
+Fallback if CNAME is rejected: A record → `216.198.79.1`.) Vercel issues the cert automatically once the
+record propagates. **WAM gotcha:** if the cert stalls, remove + re-add the domain via the API.
+
 5. Separate site session: add the `<ProjectCard external>` on dustincoledata.com `/projects` (§6, out of scope here).
 
 ## OG image
