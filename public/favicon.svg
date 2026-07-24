@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="By Example">
+  <!-- the decision boundary, in miniature: cool pole | hot-core seam | warm pole -->
+  <defs>
+    <clipPath id="c"><rect width="64" height="64" rx="12" /></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect width="64" height="64" fill="#0a0c10" />
+    <path d="M0 0 H64 V22 C46 30 40 44 34 64 H0 Z" fill="#1f7a5c" />
+    <path d="M64 22 V64 H34 C40 44 46 30 64 22 Z" fill="#c9622a" />
+    <path d="M64 22 C46 30 40 44 34 64" fill="none" stroke="#fff1c2" stroke-width="4" stroke-linecap="round" />
+    <circle cx="17" cy="20" r="6" fill="#3fe0aa" />
+    <circle cx="47" cy="47" r="6" fill="#ff9a52" />
+  </g>
+</svg>

@@ -1,0 +1,35 @@
+/* Self-hosted fonts — no CDN (a CSP blocks CDN fonts). */
+@import '@fontsource/archivo/400.css';
+@import '@fontsource/archivo/500.css';
+@import '@fontsource/archivo/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+/*
+  Spec §1.2 — LOCKED (ticket 01), CVD-validated: class-A teal ↔ class-B orange
+  worst-adjacent ΔE 8.8 (protan) ≥ 8.0. Do not re-tint.
+*/
+:root {
+  --stage: #0a0c10;
+  --chrome: #12151c;
+  --chrome-line: #1c212b;
+  --ink: #c9d1d9;
+  --ink-muted: #8b949e;
+  --ink-faint: #5a6472;
+  --focus: #4cc9f0;
+
+  --teal: #2fb488;
+  --teal-deep: #1f7a5c;
+  --teal-bright: #7fe3c4;
+  --orange: #ff8a3d;
+  --coral: #ff5a5f;
+  --hotcore: #fff1c2;
+
+  /* Type — small and restrained. Biggest heading 28–32px. NEVER a billboard. */
+  --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --r: 10px;
+  --maxw: 1120px;
+}

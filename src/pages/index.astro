@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Instrument from '../components/Instrument.astro';
+import { TAGLINE, META_DESCRIPTION } from '../lib/copy';
+---
+
+<BaseLayout title={TAGLINE} description={META_DESCRIPTION}>
+  <Instrument />
+</BaseLayout>
