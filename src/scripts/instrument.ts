@@ -17,7 +17,8 @@ import {
   SETTLE_MS, SETTLE_EPOCHS, epochsBy, MOVED_FRAC, MOVED_MS, GHOST_MS, DROP_MS, UNDO_MS,
 } from '../lib/pacing';
 import { clamp } from '../lib/prng';
-import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt } from '../lib/copy';
+import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt, probeText, forPointer } from '../lib/copy';
+import { forward } from '../lib/net';
 import type { Net, Point } from '../lib/types';
 import { createFieldRenderer, type FieldState } from './render-field';
 import { drawNet } from './render-net';
@@ -39,6 +40,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
 
   const fieldC = q<HTMLCanvasElement>('.fieldcanvas');
   const netC = q<HTMLCanvasElement>('.netcanvas');
+  const probeEl = q<HTMLElement>('.probe');
   const altEl = q<HTMLElement>('.fieldalt');
   const chipEl = q<HTMLElement>('.chip');
   const askEl = q<HTMLElement>('.ask');
@@ -48,6 +50,12 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   const labs = [...root.querySelectorAll<HTMLButtonElement>('.lab')];
 
   const drawFieldTo = createFieldRenderer();
+
+  /* A real hovering pointer. Two desktop behaviours hang off it — the copy says `click`
+     instead of `tap`, and hovering the field probes the model — and both are wrong for a
+     finger, so neither is gated on width: a touch laptop at 1440 still taps. */
+  const canProbe = matchMedia('(hover: hover) and (pointer: fine)');
+  const say = (s: string): string => forPointer(s, canProbe.matches);
 
   /* ── state ───────────────────────────────────────────────────────── */
   let net: Net = initNet(SEED);
@@ -65,6 +73,8 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   let dropT0: number | null = null;
   let cursor: [number, number] | null = null;
   let focused = false;
+  /** The point a mouse is hovering — desktop's extra verb (ticket 13). Null on touch. */
+  let probe: [number, number] | null = null;
   /** The class map before this settle, to detect whether the line actually moved. */
   let preSign: Uint8Array | null = null;
   let chipMsg: string | null = null;
@@ -90,17 +100,17 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   }
 
   function syncChrome(): void {
-    askEl.textContent = pending ? ASK.armed : editing >= 0 ? ASK.editing : ASK.rest;
+    askEl.textContent = say(pending ? ASK.armed : editing >= 0 ? ASK.editing : ASK.rest);
     askEl.classList.toggle('asking', armed());
     rmvBtn.hidden = editing < 0;
     // The label buttons are never disabled and never dimmed: they are the only colour
     // legend on screen and the most button-shaped thing on it, so a first-timer taps them
     // first. Disabled they read as two broken buttons and answer nothing.
     for (const b of labs) b.classList.toggle('rest', !armed());
-    const status = statusText();
+    const status = say(statusText());
     chipEl.textContent = status;
     overBtn.textContent = undoOpen() ? UNDO : RESET;
-    altEl.textContent = fieldAlt(data.length, status);
+    altEl.textContent = say(fieldAlt(data.length, status));
     syncRmNote();
   }
   /** Driven off the ghost's expiry, never off "a ghost object once existed" — the one
@@ -214,11 +224,18 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     }
     drawFieldTo(f.ctx, f.W, f.H, fieldState());
 
+    /* The net diagram reads whatever point is being ASKED about: the hovered point, else
+       the keyboard crosshair, else the last example placed. On the phone only the last
+       branch can ever happen, so the glyph behaves exactly as it did. */
+    const asked = probe ?? (focused && cursor ? cursor : null);
     const n = fitCanvas(netC);
     if (n.W && n.H) {
-      const sample = data.length ? data[data.length - 1]!.x : ([0, 0] as [number, number]);
+      const sample = asked ?? (data.length ? data[data.length - 1]!.x : ([0, 0] as [number, number]));
       drawNet(n.ctx, n.W, n.H, net, sample, trained());
     }
+    // Written only on change: this runs every frame, and textContent is a style recalc.
+    const want = asked ? probeText(forward(net, asked).p) : '';
+    if (probeEl.textContent !== want) probeEl.textContent = want;
   }
 
   /* ── placing and labelling ───────────────────────────────────────── */
@@ -262,10 +279,15 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     armedAtDown = pending ? [pending[0], pending[1]] : null;
     try { fieldC.setPointerCapture(e.pointerId); } catch { /* not capturable — harmless */ }
   });
+  /* A mouse can ask the model about a point without committing to one, and the rail's
+     enlarged net diagram is the answer — so hovering feeds that point through the live
+     net. */
   fieldC.addEventListener('pointermove', (e) => {
+    if (canProbe.matches) probe = ptOf(e);
     if (!down || !pending) return;
     pending = ptOf(e);
   });
+  fieldC.addEventListener('pointerleave', () => { probe = null; });
   fieldC.addEventListener('pointercancel', () => {
     down = false;
     if (armedAtDown) { pending = armedAtDown; armedAtDown = null; }
@@ -323,7 +345,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
         else { editing = -1; syncChrome(); }
         return;
       }
-      if (!pending) { askEl.textContent = ASK.needPoint; askEl.classList.add('asking'); return; }
+      if (!pending) { askEl.textContent = say(ASK.needPoint); askEl.classList.add('asking'); return; }
       const p = pending;
       pending = null;
       commit(p[0], p[1], k);

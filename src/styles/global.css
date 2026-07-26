@@ -44,6 +44,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .stack { height: 100dvh; display: flex; }
 .instrument {
+  position: relative; /* the chip floats on the field from here, not from .fieldwrap */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -52,6 +53,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   margin: 0 auto;
   min-height: 0;
 }
+
+/* The nameplate is desktop furniture. On the phone it stays in the a11y tree — the page
+   had no heading at all — but takes no space and is never focusable. */
+.mark { position: absolute; left: -9999px; margin: 0; font-size: 13px; }
+/* Desktop-only, and display:none rather than off-screen: an invisible LINK would still
+   take focus. */
+.brand, .probe { display: none; }
 
 /* ── the field ────────────────────────────────────────────────────── */
 .fieldwrap { position: relative; flex: 1; min-height: 0; }
@@ -196,15 +204,190 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
 .rmnote { margin: 10px 0 0; font-size: 12px; color: var(--ink-muted); text-align: center; }
 
 /*
-  Desktop. Ticket 08 is a MOBILE redesign, so the desktop composition is deliberately not
-  invented here — the column is centred and bounded so 1440 reads as a narrow instrument
-  rather than a stretched phone. A real two-pane layout is ticket 13.
+  The in-between band — wide enough that a full-bleed phone shell looks stretched, too
+  narrow for the two-pane composition below (which needs ~480px of field beside a 348px
+  rail). The column is centred and bounded, as ticket 08 left it.
 */
-@media (min-width: 900px) {
-  .instrument { max-width: 440px; justify-content: center; padding: 24px 0; }
+@media (min-width: 900px) and (max-width: 1119.98px) {
+  /* Centred by the PAGE, not by padding and justify-content inside the column. The chip
+     is positioned from the instrument's top edge, so any slack the column opens ABOVE the
+     field lifts the chip off it — on a tall tablet (1024×1366) by ~290px. `max-height`
+     keeps the field's flex-shrink alive so a short viewport still fits. */
+  .stack { align-items: center; }
+  .instrument { max-width: 440px; max-height: 100%; }
   .fieldwrap { flex: 0 1 560px; min-height: 220px; }
   canvas.fieldcanvas { border-radius: var(--r) var(--r) 0 0; }
   .card { border-radius: 20px; }
+}
+
+/*
+  Desktop — ticket 13. Two panes: the field is the graphic and gets the room, the chrome
+  moves BESIDE it instead of under it, and nothing floats over the data any more.
+
+  Three things here are decisions, not styling:
+   - the axis labels move into real gutters outside the canvas, so they stop occluding
+     the field and can drop the text-shadow they needed to survive on top of it;
+   - the field's frame is a box-shadow ring, never a border. A border shrinks the canvas
+     inside its own bounding box, which puts getBoundingClientRect() (the hit test) and
+     clientWidth (the drawing surface) a pixel out of step;
+   - the instrument's max-width is derived from the viewport HEIGHT, so the field can
+     never stretch past --field-ar. Above that the whole composition centres instead.
+*/
+@media (min-width: 1120px) {
+  :root {
+    --rail: 348px;
+    --gap: 28px;
+    --pad: 28px;
+    --gut-l: 36px;
+    --gut-b: 34px;
+    /* Square. The two axes are symmetric quantities and the field says so — and only a
+       square renders the diagonal the six seeds teach AS a diagonal. Measured: at 1.25
+       the same rule reads as a shallow slope. The cap binds on every standard desktop
+       (1366×768 → 678², 1440×900 → 810², 1920×1080 → 990², 2560×1440 → 1350²). */
+    --field-ar: 1;
+  }
+
+  .stack { padding: var(--pad); }
+  .instrument {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rail);
+    grid-template-rows: auto auto 1fr auto;
+    column-gap: var(--gap);
+    max-width: calc(
+      var(--gut-l) + var(--field-ar) * (100dvh - 2 * var(--pad) - var(--gut-b))
+      + var(--gap) + var(--rail)
+    );
+  }
+
+  /* ── the field pane ── */
+  .fieldwrap {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    flex: none;
+    padding: 0 0 var(--gut-b) var(--gut-l);
+  }
+  /* Sized, not inset-stretched: <canvas> is a REPLACED element, so `width:auto` resolves
+     to its intrinsic 300×150 and the opposite inset is dropped. */
+  canvas.fieldcanvas {
+    inset: 0 auto auto var(--gut-l);
+    width: calc(100% - var(--gut-l));
+    height: calc(100% - var(--gut-b));
+    border-radius: var(--r);
+    box-shadow: 0 0 0 1px var(--chrome-line);
+    cursor: crosshair;
+  }
+  .ax {
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+    text-shadow: none; /* it is off the data now */
+  }
+  .ax-x { bottom: 8px; left: calc(50% + var(--gut-l) / 2); }
+  .ax-y { left: 13px; top: calc(50% - var(--gut-b) / 2); }
+
+  /* ── the rail ── */
+  .mark {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+    padding-bottom: 14px;
+  }
+
+  /* The status stops being a chip and becomes the rail's headline: it is the first
+     English on the widest surface, so it carries the thesis at real size. */
+  .chip {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    width: auto;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    backdrop-filter: none;
+    font-size: 20px;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+    color: #e7edf3;
+    text-wrap: balance;
+  }
+
+  /* The panel runs the height of the field, so the two panes end together instead of a
+     phone card floating in a column. What you DO sits at the top, under the line that
+     explains it; the machinery sits at the bottom. The air between them is the layout,
+     not a hole waiting to be filled — a legend for the field was considered and cut,
+     because the two label buttons already are the colour legend (ticket 12) and 07's
+     call stands: meaning comes from the axes and the gesture, not from more text. */
+  .card {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    margin-top: 26px;
+    border: 1px solid var(--chrome-line);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: none;
+  }
+  /* Clears the ARMED line (18px × 1.4 = 25.2) — same reason as the phone: sized to the
+     resting line, arming nudges the label pair down a pixel mid-gesture. */
+  .askrow { min-height: 26px; margin-bottom: 12px; }
+  .lab { height: 54px; font-size: 17px; }
+
+  /* The strip becomes a block: the net gets the room the phone could not give it, and
+     the reset sits beside its caption instead of at the end of a queue. */
+  .strip {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 9px 12px;
+    margin-top: auto; /* pinned to the foot of the panel */
+    padding-top: 14px;
+  }
+  .strip .spacer { display: none; }
+  /* The diagram takes some of the height the taller screen gives the panel, rather than
+     letting all of it become air. Bounded at both ends: below 200 the labels crowd, above
+     300 the 8 hidden nodes spread until the fan reads as a stretched net. */
+  canvas.netcanvas { grid-column: 1 / -1; width: 100%; height: clamp(200px, 26vh, 300px); opacity: 1; }
+  .spec { grid-column: 1; }
+  .over { grid-column: 2; justify-self: end; }
+  /* Reserves its own line so the readout appearing never moves the reset button. */
+  .probe {
+    display: block;
+    grid-column: 1 / -1;
+    min-height: 17px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+  }
+  .rmnote { text-align: left; }
+
+  /* The rail's footer line, set on the same baseline as the x-axis label under the field
+     — the two panes get the same foot, so the composition ends once. */
+  .brand {
+    display: block;
+    grid-column: 2;
+    grid-row: 4;
+    align-self: end;
+    margin: 16px 0 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    width: max-content;
+  }
+  .brand:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -12,18 +12,27 @@
 */
 import {
   AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE, NET_CAPTION, RESET, REMOVE, FIELD_ARIA,
+  TITLE, BRAND, BRAND_HREF,
 } from '../lib/copy';
 ---
 
 <section class="instrument">
+  <!-- The page had no heading at any width. It is the rail's nameplate on desktop and
+       stays in the a11y tree on the phone (visually hidden), where there is no room for
+       it — an addition, not a mobile design change. -->
+  <h1 class="mark">{TITLE}</h1>
+
   <div class="fieldwrap">
     <canvas class="fieldcanvas" tabindex="0" role="application" aria-label={FIELD_ARIA}
       ><p class="fieldalt"></p></canvas
     >
     <span class="ax ax-x" aria-hidden="true">{AXIS_X}</span>
     <span class="ax ax-y" aria-hidden="true">{AXIS_Y}</span>
-    <span class="chip" role="status"></span>
   </div>
+
+  <!-- A sibling of the field, not a child of it: on the phone it floats over the field
+       exactly as before, and on desktop the same element is the rail's headline. -->
+  <span class="chip" role="status"></span>
 
   <div class="card">
     <div class="askrow">
@@ -39,9 +48,16 @@ import {
       <canvas class="netcanvas" aria-hidden="true"></canvas>
       <span class="spec">{NET_CAPTION}</span>
       <button class="over" type="button">{RESET}</button>
+      <!-- Desktop only. Visual, and aria-hidden on purpose: it fires on every mouse move
+           and says nothing the field's own description doesn't already carry. -->
+      <span class="probe" aria-hidden="true"></span>
     </div>
     <p class="rmnote" role="status" hidden></p>
   </div>
+
+  <!-- The only outbound brand link. Desktop only: 08's one-screen phone shell has no
+       room for it, and that gap is Dustin's call, not this ticket's. -->
+  <a class="brand" href={BRAND_HREF}>{BRAND}</a>
 </section>
 
 <script>

@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   TITLE, TAGLINE, META_DESCRIPTION, AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE,
   NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA, ASK, CHIP, fieldAlt,
+  BRAND, BRAND_HREF, forPointer, probeText,
 } from './copy';
 
 const allCopy = (): string => [
   TITLE, TAGLINE, META_DESCRIPTION, AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE,
-  NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA,
+  NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA, BRAND,
+  probeText(0.87), probeText(0.13),
   ...Object.values(ASK),
   CHIP.thesis, CHIP.learning, CHIP.moved, CHIP.empty, CHIP.allRipe, CHIP.noneRipe,
   CHIP.missed(1, 7), CHIP.count(7, 4),
@@ -68,6 +70,35 @@ describe('the status chip does the on-ramp the tour used to do', () => {
 
   it('answers instead of doing nothing when a label is pressed with nothing armed', () => {
     expect(ASK.needPoint).toBe('tap the field first — then say which it is');
+  });
+});
+
+/*
+  Ticket 13 — desktop. The strings above are authored once, for a phone, and the gesture
+  word is swapped at the point of display; the probe readout is desktop's extra verb.
+*/
+describe('the desktop layer', () => {
+  it('says click to a mouse and tap to a finger, from the same authored string', () => {
+    expect(forPointer(CHIP.thesis, true)).toBe('click anywhere. it figures out the rule.');
+    expect(forPointer(CHIP.thesis, false)).toBe(CHIP.thesis);
+    expect(forPointer(ASK.rest, true)).toBe('click anywhere to add a peach');
+    expect(forPointer(TAGLINE, true)).toBe('Click anywhere. It figures out the rule.');
+  });
+
+  it('swaps whole words only, so it can never chew a word that contains one', () => {
+    expect(forPointer('tapered tapas, untapped', true)).toBe('tapered tapas, untapped');
+    expect(forPointer('tap the tap', true)).toBe('click the click');
+  });
+
+  it('the probe names the class the way the field paints it — p is P(not ripe)', () => {
+    expect(probeText(0.87)).toBe(`here: ${LABEL_NOT_RIPE} · 87% sure`);
+    expect(probeText(0.13)).toBe(`here: ${LABEL_RIPE} · 87% sure`);
+    expect(probeText(0.5)).toBe(`here: ${LABEL_NOT_RIPE} · 50% sure`);
+  });
+
+  it('carries the one outbound brand link', () => {
+    expect(BRAND).toBe('dustincoledata.com');
+    expect(BRAND_HREF).toBe('https://dustincoledata.com');
   });
 });
 

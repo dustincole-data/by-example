@@ -15,6 +15,10 @@
 
 export const TITLE = 'By Example';
 
+/** The site link, restored on desktop only — the phone shell has no room for it. */
+export const BRAND = 'dustincoledata.com';
+export const BRAND_HREF = 'https://dustincoledata.com';
+
 /** <title> / OG / meta / repo description / the dustincoledata /projects card. */
 export const TAGLINE = 'Tap anywhere. It figures out the rule.';
 export const META_DESCRIPTION =
@@ -67,6 +71,26 @@ export const CHIP = {
 /** Reduced motion: the previous boundary is held dashed, so the change is legible with
  *  zero movement. The note expires WITH the ghost it names. */
 export const RM_NOTE = 'dashed = the line before your peach';
+
+/**
+ * Ticket 13. Every string above names the gesture `tap`, because 08 wrote them for a
+ * phone — and on a 1440 desktop the toy's own headline then opens by telling a mouse user
+ * to tap. The strings stay authored once and are swapped at the point of display, so the
+ * copy has one source and the tests keep asserting the literals they were given.
+ *
+ * Chosen off `(hover: hover) and (pointer: fine)`, never off width: a touch laptop at
+ * 1440 still taps.
+ */
+export const forPointer = (s: string, fine: boolean): string =>
+  (fine ? s.replace(/\btap\b/g, 'click').replace(/\bTap\b/g, 'Click') : s);
+
+/**
+ * The desktop probe readout (ticket 13). A mouse can ask the model about a point without
+ * committing to one, and the rail's big net diagram is the answer — this line is its
+ * number. `p` is P(not ripe), the same convention the field paints.
+ */
+export const probeText = (p: number): string =>
+  `here: ${p >= 0.5 ? LABEL_NOT_RIPE : LABEL_RIPE} · ${Math.round(Math.max(p, 1 - p) * 100)}% sure`;
 
 /** The field is a real control, so it states the whole key path (spec §Accessibility). */
 export const FIELD_ARIA =

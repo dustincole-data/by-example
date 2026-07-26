@@ -84,6 +84,11 @@ export function createFieldRenderer(): FieldRenderer {
     ctx.fillRect(0, 0, W, H);
     frameNo++;
 
+    /* The marks ARE the thesis — your examples define the rule — so they cannot stay a
+       phone's 6.5px on a 970px desktop field, where they read as specks. Anchored so a
+       390-wide field is exactly 1.0× (ticket 08's measured size is untouched). */
+    const PR = LOOK.pointR * clamp(W / 390, 1, 1.5);
+
     const trained = s.data.length > 0;
     if (trained) {
       const n = s.settling ? GRID_LO : GRID_HI;
@@ -211,17 +216,17 @@ export function createFieldRenderer(): FieldRenderer {
     const armed = s.pending !== null || s.editing >= 0;
     const last = s.data.length - 1;
     s.data.forEach((d, i) => {
-      let r = LOOK.pointR;
+      let r = PR;
       let ring = 0;
       if (s.dropT0 !== null && i === last && !s.reduced) {
         const t = clamp((performance.now() - s.dropT0) / DROP_MS, 0, 1);
-        r = LOOK.pointR * (0.2 + 0.8 * easeOutQuart(t));
+        r = PR * (0.2 + 0.8 * easeOutQuart(t));
         ring = t < 1 ? t : 0;
       }
       const sel = i === s.editing;
-      if (sel) r = LOOK.pointR * 1.15;
+      if (sel) r = PR * 1.15;
       mark(d.x[0], d.x[1], d.y === 0 ? POINT_A : POINT_B, r, ring, d.y, armed && !sel ? 0.34 : 1);
-      if (sel) pulse(nx(d.x[0]) * W, ny(d.x[1]) * H, LOOK.pointR + 8, d.y);
+      if (sel) pulse(nx(d.x[0]) * W, ny(d.x[1]) * H, PR + 8, d.y);
     });
 
     /* The pending mark gets the FULL mark treatment, in the cream the boundary line uses —
@@ -231,15 +236,15 @@ export function createFieldRenderer(): FieldRenderer {
     if (s.pending) {
       const px = nx(s.pending[0]) * W, py = ny(s.pending[1]) * H;
       const a = s.reduced ? 1 : 0.72 + 0.28 * Math.sin(performance.now() / 260);
-      mark(s.pending[0], s.pending[1], '#fff1c2', LOOK.pointR, 0, null, 1);
+      mark(s.pending[0], s.pending[1], '#fff1c2', PR, 0, null, 1);
       ctx.save();
       ctx.globalAlpha = a;
       ctx.strokeStyle = 'rgba(255,241,194,0.9)';
       ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 9, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px, py, PR + 9, 0, 7); ctx.stroke();
       ctx.globalAlpha = a * 0.45;
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 16, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px, py, PR + 16, 0, 7); ctx.stroke();
       ctx.restore();
     }
 
@@ -258,7 +263,7 @@ export function createFieldRenderer(): FieldRenderer {
       ctx.setLineDash([]);
       ctx.lineWidth = 2;
       ctx.strokeStyle = 'rgba(76,201,240,0.95)';
-      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 3, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px, py, PR + 3, 0, 7); ctx.stroke();
       ctx.restore();
     }
   };
