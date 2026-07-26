@@ -1,13 +1,29 @@
-import { describe, it, expect } from 'vitest';
-import { computeField, contourSegs, fieldToImage, GW, GH, nx, ny, vx, vy, XR } from './field';
-import { train, initNet, SEED, EPOCHS, LR_SANDBOX } from './net';
-import { blobs } from './presets';
-import { SEAM } from './palette';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  computeField, contourSegs, fieldToImage, signOf, syncDomain,
+  nx, ny, vx, vy, XR, YR, FIELD_MAX, GRID_LO, GRID_HI,
+} from './field';
+import { initNet, step, SEED, LR } from './net';
+import { LOOK, SEAM, fieldColor } from './palette';
+import type { Point } from './types';
+
+/** YR is module state, so every test starts from the square domain. */
+beforeEach(() => { syncDomain(1, 1); });
+
+const twoBlobs: Point[] = [
+  { x: [0.6, 0.5], y: 0 }, { x: [0.8, 0.35], y: 0 },
+  { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 },
+];
+const settled = (epochs = 200) => {
+  const w = initNet(SEED);
+  for (let i = 0; i < epochs; i++) step(w, twoBlobs, LR);
+  return w;
+};
 
 describe('input-space ⇆ view mapping', () => {
   it('flips y so +y reads up', () => {
-    expect(ny(XR[1])).toBeCloseTo(0, 10);
-    expect(ny(XR[0])).toBeCloseTo(1, 10);
+    expect(ny(YR[1])).toBeCloseTo(0, 10);
+    expect(ny(YR[0])).toBeCloseTo(1, 10);
   });
 
   it('round-trips', () => {
@@ -18,55 +34,117 @@ describe('input-space ⇆ view mapping', () => {
   });
 });
 
+/*
+  The square domain stretched onto a 390×648 box rendered a true 45° boundary at 59°,
+  while the grid was drawn in square PIXELS — the picture asserted that softness dominated
+  when the model weighs the two inputs about equally (ticket 08, D11).
+*/
+describe('isotropic domain (syncDomain)', () => {
+  const unitsPerPx = (w: number, h: number): [number, number] => {
+    syncDomain(w, h);
+    return [(XR[1] - XR[0]) / w, (YR[1] - YR[0]) / h];
+  };
+
+  it('makes one pixel span the same domain distance on both axes', () => {
+    for (const [w, h] of [[390, 648], [1440, 900], [560, 560], [300, 900]] as [number, number][]) {
+      const [ux, uy] = unitsPerPx(w, h);
+      expect(uy / ux).toBeCloseTo(1, 10);
+    }
+  });
+
+  it('reports whether the domain actually moved, so the field cache is not rebuilt for nothing', () => {
+    syncDomain(390, 648);
+    expect(syncDomain(390, 648)).toBe(false);
+    expect(syncDomain(390, 500)).toBe(true);
+  });
+
+  it('leaves X alone and survives a zero-sized box', () => {
+    syncDomain(0, 0);
+    expect([XR[0], XR[1]]).toEqual([-1.15, 1.15]);
+    expect(YR[1]).toBeCloseTo(1.15, 10);
+  });
+});
+
 describe('confidence field', () => {
-  it('evaluates the model over the whole coarse grid', () => {
-    const P = computeField(initNet(SEED));
-    expect(P).toHaveLength(GW * GH);
-    for (const p of P) {
-      expect(p).toBeGreaterThan(0);
-      expect(p).toBeLessThan(1);
+  it('evaluates the model over the whole grid, at either resolution', () => {
+    for (const n of [GRID_LO, GRID_HI]) {
+      const P = computeField(initNet(SEED), n);
+      expect(P).toHaveLength(n * n);
+      for (const p of P) {
+        expect(p).toBeGreaterThan(0);
+        expect(p).toBeLessThan(1);
+      }
     }
   });
 
   it('paints opaque RGBA, with the low-confidence midband at the dim seam', () => {
-    const img = new Uint8ClampedArray(GW * GH * 4);
-    const P = new Float32Array(GW * GH).fill(0.5);
-    fieldToImage(P, img, 1.22);
+    const img = new Uint8ClampedArray(GRID_LO * GRID_LO * 4);
+    fieldToImage(new Float32Array(GRID_LO * GRID_LO).fill(0.5), img, LOOK.fieldGamma);
     expect([img[0], img[1], img[2]]).toEqual(SEAM);
     expect(img[3]).toBe(255);
+  });
+
+  /*
+    The marks sit on ground of their OWN hue, so only luminance can separate them — and at
+    the old cap (FIELD_MAX 0.78, bloomAlpha 0.2) the best achievable contrast for ANY mark
+    colour, including pure white, was 2.6:1. Raising either number breaks the 3:1 gate on
+    the orange class first, so both are pinned here (ticket 08, engine finding 2).
+  */
+  it('caps displayed confidence, so a certain model never paints a pole brighter than the cap', () => {
+    expect(FIELD_MAX).toBeLessThanOrEqual(0.4);
+    expect(LOOK.bloomAlpha).toBeLessThanOrEqual(0.08);
+
+    const img = new Uint8ClampedArray(2 * 4);
+    fieldToImage(Float32Array.from([0, 1]), img, LOOK.fieldGamma);
+    const capped = [
+      fieldColor(0.5 - FIELD_MAX / 2, LOOK.fieldGamma),
+      fieldColor(0.5 + FIELD_MAX / 2, LOOK.fieldGamma),
+    ];
+    expect([img[0], img[1], img[2]]).toEqual(capped[0]!.map((c) => c | 0));
+    expect([img[4], img[5], img[6]]).toEqual(capped[1]!.map((c) => c | 0));
+  });
+
+  it('signOf reports which side of the boundary each cell is on', () => {
+    const s = signOf(Float32Array.from([0.1, 0.5, 0.9]));
+    expect([...s]).toEqual([0, 1, 1]);
   });
 });
 
 describe('p = 0.5 contour (marching squares)', () => {
   it('produces no line when the field never crosses 0.5', () => {
-    expect(contourSegs(new Float32Array(GW * GH).fill(0.9))).toHaveLength(0);
-    expect(contourSegs(new Float32Array(GW * GH).fill(0.1))).toHaveLength(0);
+    expect(contourSegs(new Float32Array(GRID_LO * GRID_LO).fill(0.9), GRID_LO)).toHaveLength(0);
+    expect(contourSegs(new Float32Array(GRID_LO * GRID_LO).fill(0.1), GRID_LO)).toHaveLength(0);
   });
 
-  it('traces a boundary once the model has learned one', () => {
-    const hist = train(blobs(SEED), LR_SANDBOX, SEED);
-    const segs = contourSegs(computeField(hist[EPOCHS]!.w));
-    expect(segs.length).toBeGreaterThan(0);
-    for (const [a, b] of segs) {
-      expect(a[0]).toBeGreaterThanOrEqual(0);
-      expect(a[0]).toBeLessThanOrEqual(GW - 1);
-      expect(b[1]).toBeGreaterThanOrEqual(0);
-      expect(b[1]).toBeLessThanOrEqual(GH - 1);
+  /* Normalized, so a ghost captured at 128² still draws correctly over a field being
+     recomputed at 64² — the reduced-motion path depends on exactly this. */
+  it('returns NORMALIZED 0..1 box coords, identically at both resolutions', () => {
+    const w = settled();
+    for (const n of [GRID_LO, GRID_HI]) {
+      const segs = contourSegs(computeField(w, n), n);
+      expect(segs.length).toBeGreaterThan(0);
+      for (const [a, b] of segs) {
+        for (const v of [a[0], a[1], b[0], b[1]]) {
+          expect(v).toBeGreaterThanOrEqual(0);
+          expect(v).toBeLessThanOrEqual(1);
+        }
+      }
     }
   });
 
   it('every segment endpoint sits where the field really is 0.5', () => {
-    const hist = train(blobs(SEED), LR_SANDBOX, SEED);
-    const P = computeField(hist[EPOCHS]!.w);
-    const bilinear = (gx: number, gy: number): number => {
-      const x0 = Math.floor(gx), y0 = Math.floor(gy);
-      const x1 = Math.min(GW - 1, x0 + 1), y1 = Math.min(GH - 1, y0 + 1);
+    const n = GRID_HI;
+    const P = computeField(settled(), n);
+    const bilinear = (u: number, v: number): number => {
+      const gx = u * n - 0, gy = v * n - 0;
+      const x0 = Math.min(n - 1, Math.floor(gx)), y0 = Math.min(n - 1, Math.floor(gy));
+      const x1 = Math.min(n - 1, x0 + 1), y1 = Math.min(n - 1, y0 + 1);
       const fx = gx - x0, fy = gy - y0;
-      const p00 = P[y0 * GW + x0]!, p10 = P[y0 * GW + x1]!;
-      const p01 = P[y1 * GW + x0]!, p11 = P[y1 * GW + x1]!;
+      const p00 = P[y0 * n + x0]!, p10 = P[y0 * n + x1]!;
+      const p01 = P[y1 * n + x0]!, p11 = P[y1 * n + x1]!;
       return (p00 * (1 - fx) + p10 * fx) * (1 - fy) + (p01 * (1 - fx) + p11 * fx) * fy;
     };
-    for (const [a, b] of contourSegs(P)) {
+    for (const [a, b] of contourSegs(P, n)) {
       expect(bilinear(a[0], a[1])).toBeCloseTo(0.5, 6);
       expect(bilinear(b[0], b[1])).toBeCloseTo(0.5, 6);
     }

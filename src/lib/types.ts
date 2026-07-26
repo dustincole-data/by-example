@@ -1,8 +1,7 @@
-/** A labeled 2D example. `intruder` is a Beat-3 annotation, not a model property. */
+/** A labeled example. `y` 0 = ripe (teal disc), 1 = not ripe (orange diamond). */
 export interface Point {
   x: [number, number];
   y: 0 | 1;
-  intruder?: boolean;
 }
 
 /**
@@ -15,13 +14,3 @@ export interface Net {
   W2: number[];
   b2: number;
 }
-
-/** One epoch of the recorded run: the weights plus the model's real metrics. */
-export interface Snapshot {
-  w: Net;
-  acc: number;
-  loss: number;
-  conf: number;
-}
-
-export type Brush = 0 | 1;

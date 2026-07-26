@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { initNet, forward, train, metrics, cloneNet, HID, EPOCHS, SEED, LR_SANDBOX } from './net';
-import { blobs } from './presets';
-import type { Point } from './types';
+import { initNet, forward, step, metrics, cloneNet, HID, SEED, LR, WD } from './net';
+import type { Net, Point } from './types';
+
+const twoBlobs: Point[] = [
+  { x: [0.6, 0.5], y: 0 }, { x: [0.8, 0.35], y: 0 }, { x: [0.45, 0.7], y: 0 },
+  { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 }, { x: [-0.45, -0.7], y: 1 },
+];
+const settle = (data: Point[], epochs: number, seed = SEED): Net => {
+  const w = initNet(seed);
+  for (let i = 0; i < epochs; i++) step(w, data, LR);
+  return w;
+};
+const maxAbsW = (w: Net): number =>
+  Math.max(...w.W1.flat().map(Math.abs), ...w.W2.map(Math.abs));
 
 describe('net shape', () => {
   it('is a fixed 2 → 8 → 1 MLP', () => {
@@ -22,7 +33,7 @@ describe('net shape', () => {
   });
 });
 
-describe('determinism (spec §5 — seeded init + fixed order → reproducible demos)', () => {
+describe('determinism — seeded init + fixed order → reproducible', () => {
   it('same seed gives bit-for-bit identical init', () => {
     expect(initNet(SEED)).toEqual(initNet(SEED));
   });
@@ -31,60 +42,53 @@ describe('determinism (spec §5 — seeded init + fixed order → reproducible d
     expect(initNet(SEED)).not.toEqual(initNet(SEED + 1));
   });
 
-  it('same data + lr + seed gives a bit-for-bit identical run', () => {
-    const data = blobs(SEED);
-    const a = train(data, LR_SANDBOX, SEED);
-    const b = train(data, LR_SANDBOX, SEED);
-    expect(a[EPOCHS]!.w).toEqual(b[EPOCHS]!.w);
-    expect(a[EPOCHS]!.loss).toBe(b[EPOCHS]!.loss);
+  it('the same examples settle to a bit-for-bit identical model', () => {
+    expect(settle(twoBlobs, 200)).toEqual(settle(twoBlobs, 200));
   });
 
-  it('cloneNet is a deep copy — mutating the clone cannot corrupt a snapshot', () => {
+  it('cloneNet is a deep copy — the undo snapshot must not alias the live weights', () => {
     const w = initNet(SEED);
-    const c = cloneNet(w);
-    c.W1[0]![0] = 999;
-    c.b1[0] = 999;
-    expect(w.W1[0]![0]).not.toBe(999);
-    expect(w.b1[0]).not.toBe(999);
+    const snap = cloneNet(w);
+    for (let i = 0; i < 50; i++) step(w, twoBlobs, LR);
+    expect(snap).toEqual(initNet(SEED));
   });
 });
 
-describe('training is real (spec §5 — nothing is scripted or faked)', () => {
-  const data = blobs(SEED);
-  const hist = train(data, LR_SANDBOX, SEED);
-
-  it('records init at epoch 0 and every epoch through the budget', () => {
-    expect(hist).toHaveLength(EPOCHS + 1);
-    expect(hist[0]!.w).toEqual(initNet(SEED));
+describe('training is real — nothing is scripted or faked', () => {
+  it('gradient descent drives the loss down and fits both blobs', () => {
+    const before = metrics(initNet(SEED), twoBlobs);
+    const after = metrics(settle(twoBlobs, 200), twoBlobs);
+    expect(after.loss).toBeLessThan(before.loss);
+    expect(after.correct).toBe(twoBlobs.length);
   });
 
-  it('loss falls monotonically under full-batch gradient descent', () => {
-    for (let e = 1; e <= EPOCHS; e++) {
-      expect(hist[e]!.loss).toBeLessThanOrEqual(hist[e - 1]!.loss);
+  it('loss falls monotonically, epoch by epoch', () => {
+    const w = initNet(SEED);
+    let prev = metrics(w, twoBlobs).loss;
+    for (let e = 0; e < 200; e++) {
+      step(w, twoBlobs, LR);
+      const loss = metrics(w, twoBlobs).loss;
+      expect(loss).toBeLessThanOrEqual(prev + 1e-12);
+      prev = loss;
     }
   });
 
-  it('confidence climbs from near-zero to near-certain — the quantity the snap reads', () => {
-    expect(hist[0]!.conf).toBeLessThan(0.75);
-    expect(hist[EPOCHS]!.conf).toBeGreaterThan(hist[0]!.conf);
-    expect(hist[EPOCHS]!.conf).toBeGreaterThan(0.9);
-  });
-
-  it('the recorded metrics are the model, not a script', () => {
-    const m = metrics(hist[EPOCHS]!.w, data);
-    expect(m.acc).toBeCloseTo(hist[EPOCHS]!.acc, 12);
-    expect(m.loss).toBeCloseTo(hist[EPOCHS]!.loss, 12);
-  });
-
-  it('accuracy is the real fraction of correctly classified examples', () => {
-    const w = hist[EPOCHS]!.w;
+  it('`correct` is the real count of correctly classified examples', () => {
+    const w = settle(twoBlobs, 200);
     let correct = 0;
-    for (const d of data) if ((forward(w, d.x).p >= 0.5 ? 1 : 0) === d.y) correct++;
-    expect(metrics(w, data).acc).toBe(correct / data.length);
+    for (const d of twoBlobs) if ((forward(w, d.x).p >= 0.5 ? 1 : 0) === d.y) correct++;
+    expect(metrics(w, twoBlobs).correct).toBe(correct);
+  });
+
+  it('an empty set is a no-op, not a divide-by-zero — reset leaves a clean model', () => {
+    const w = initNet(SEED);
+    step(w, [], LR);
+    expect(w).toEqual(initNet(SEED));
+    expect(metrics(w, []).loss).toBe(0);
   });
 });
 
-describe('the hidden layer earns its keep (spec §9 acceptance)', () => {
+describe('the hidden layer earns its keep', () => {
   it('learns XOR, which no linear boundary can separate', () => {
     const q: Point[] = [
       { x: [-0.5, 0.5], y: 0 },
@@ -92,7 +96,41 @@ describe('the hidden layer earns its keep (spec §9 acceptance)', () => {
       { x: [0.5, 0.5], y: 1 },
       { x: [-0.5, -0.5], y: 1 },
     ];
-    const hist = train(q, LR_SANDBOX, SEED, 2000);
-    expect(hist[2000]!.acc).toBe(1);
+    expect(metrics(settle(q, 2000), q).correct).toBe(4);
+  });
+});
+
+/*
+  The engine finding that makes CONTINUOUS training viable at all (ticket 08). Without
+  decay, every tap drives |w| up until confidence saturates: the field flattens to two
+  flat poles, the marks vanish into ground of their own colour, and the boundary stops
+  visibly moving. These are the guard on WD ever being dropped or zeroed.
+*/
+describe('L2 weight decay — required by continuous training', () => {
+  it('makes |w| CONVERGE instead of growing without bound', () => {
+    // On separable data an undecayed net keeps pushing |w| up forever to buy confidence,
+    // which is exactly the saturation that erases the marks. With decay it plateaus.
+    const w = initNet(SEED);
+    let ran = 0;
+    const at = (n: number): number => {
+      while (ran < n) { step(w, twoBlobs, LR); ran++; }
+      return maxAbsW(w);
+    };
+    const early = at(200);
+    const settled = at(2000);
+    const forever = at(16000);
+    expect(settled).toBeLessThan(early); // decay pulls it down…
+    expect(Math.abs(forever - settled)).toBeLessThan(1e-3); // …to a fixed point, and holds
+    expect(metrics(w, twoBlobs).correct).toBe(twoBlobs.length); // while still fitting
+  });
+
+  it('bounds |w| under long continuous training, so tap #20 still bends the line', () => {
+    expect(WD).toBeGreaterThan(0);
+    // 20 examples' worth of settles back to back, the way the live toy runs.
+    const w = initNet(SEED);
+    for (let i = 0; i < 20; i++) for (let e = 0; e < 200; e++) step(w, twoBlobs, LR);
+    expect(maxAbsW(w)).toBeLessThan(1 / (LR * WD)); // the decay fixed point
+    // …and the model has not saturated, i.e. the ground is still soft under the marks.
+    expect(forward(w, [0.6, 0.5]).p).toBeLessThan(0.999);
   });
 });

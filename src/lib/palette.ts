@@ -55,18 +55,22 @@ export function fieldColor(p: number, gamma?: number): RGB {
 }
 
 /**
- * The LOCKED graft look tokens (ticket 01): Direction A's framed chrome + rigorous
- * scatter + net as a modest side-panel, with a touch of Direction B's field bloom.
+ * The LOCKED graft look tokens (ticket 01), amended by ticket 08's contrast measurement.
+ *
+ * `bloomAlpha` was 0.2. The bloom is a `lighter` composite, so it multiplies the ground's
+ * luminance by ~(1 + alpha) — at 0.2 it was undoing the confidence cap and pushing the
+ * settled ground above anything a mark could out-contrast. It is bound to `FIELD_MAX` in
+ * field.ts: raising either one breaks the marks' 3:1 gate on the orange class first.
+ *
+ * `pointR` went 5.2 → 6.5: the marks are the reading, and the field is now full-bleed
+ * behind a thumb rather than a framed panel under a mouse.
  */
 export const LOOK = {
-  bloomAlpha: 0.2,
+  bloomAlpha: 0.08,
   bloomBlur: 10,
   fieldGamma: 1.22,
   lineGlow: 10,
-  pointR: 5.2,
+  pointR: 6.5,
   edgeK: 2.3,
   netGlow: 9,
-  curveW: 2,
-  plotGridA: 0.55,
-  showGrid: true,
 } as const;

@@ -1,10 +1,9 @@
 # By Example
 
-**Drop labeled points. Watch a machine find the rule.**
+**Tap anywhere. It figures out the rule.**
 
-A playable ML instrument: you give a machine examples, and it learns the rule in front of you.
-Click to drop class-A / class-B points on a dark field, press Train, and watch a real
-`2→8→1` neural net bend its decision boundary to fit them while accuracy climbs and loss falls.
+A playable ML instrument, one screen and one gesture: tap the field to drop a peach, say
+whether it was ripe, and a real `2→8→1` neural net re-draws its boundary in front of you.
 
 Live at **[byexample.dustincoledata.com](https://byexample.dustincoledata.com)**.
 
@@ -13,44 +12,56 @@ Live at **[byexample.dustincoledata.com](https://byexample.dustincoledata.com)**
 You never wrote a rule. You gave examples, and the machine found the rule itself — and you
 watched it happen. That is what training is, made visible and playable.
 
+The field is `how sweet` × `how soft`, so the axes mean something before you read a word:
+the six examples it opens with already teach *sweet + soft = ripe*, which is the rule you
+believed about fruit anyway. There is no tour, no Train button and no modes. Training is
+continuous — the boundary re-settles on its own after every example.
+
 ## It's real ML, not a simulation
 
 - Hand-rolled MLP `2 → 8 → 1`, tanh hidden + sigmoid output, binary cross-entropy,
-  full-batch **gradient descent**. ~150 lines, zero dependencies ([src/lib/net.ts](src/lib/net.ts)).
-- Accuracy, loss, epoch and the boundary are computed from the actual model. Nothing is
-  scripted or faked. The mechanism-net panel draws the model's **real** weights and activations.
+  full-batch **gradient descent**. Zero dependencies ([src/lib/net.ts](src/lib/net.ts)).
+- The boundary, the counts and the net glyph's weights and activations are all read off the
+  live model. Nothing is scripted or faked.
 - Seeded `mulberry32` init + fixed training order → runs are bit-for-bit reproducible.
-- The confidence field is a forward pass over a coarse grid each epoch → `ImageData` upscale
-  + marching-squares `p=0.5` contour, canvas 2D (~5–9 ms/epoch). No WebGL.
+- The confidence field is a forward pass over a coarse grid → `ImageData` upscale +
+  marching-squares `p=0.5` contour, canvas 2D. No WebGL.
 
 Everything runs **in your browser**. No server, no API, no telemetry, no build-time data.
 
-## Presets
+## Three things that are load-bearing, not taste
 
-A genuine easy → aha → hard ladder. Every one fits on all 8 seeds
-(train accuracy ≥ 0.98 **and** ≥ 0.95 on 400 held-out points) — verified in
-[src/lib/presets.test.ts](src/lib/presets.test.ts).
+Each was measured, and each looks like a bug if you "fix" it:
 
-| # | Preset | What it teaches |
-|---|--------|-----------------|
-| 1 | **two blobs** | Linearly separable — a straight boundary suffices. |
-| 2 | **XOR** | The canonical *a line cannot do this*; the hidden layer earns its keep. |
-| 3 | **circles** | A **closed** boundary — the net wraps a ring around the inner class. |
-| 4 | **moons** | A curved seam threading two arcs. Reads most like "it learned a shape". |
+1. **L2 weight decay** (`WD` in [src/lib/net.ts](src/lib/net.ts)) is what makes continuous
+   training viable. Without it every tap drives `|w|` up until confidence saturates: the
+   field flattens to two flat poles, the marks vanish into ground of their own colour, and
+   the boundary stops visibly moving.
+2. **`FIELD_MAX` and `LOOK.bloomAlpha` are pinned together** ([src/lib/field.ts](src/lib/field.ts)).
+   A settled mark always sits on ground of its own hue, and saturation is absent from the
+   WCAG contrast formula — only the ground's luminance can separate them. Raising either
+   number breaks the 3:1 gate on the orange class first. Measure on a *used* field: at the
+   six seeds it reads a false pass.
+3. **Both axis labels end in `→`, including the vertical one.** The Y label renders
+   `rotate(-90deg)`, which maps the text's own +x onto screen-up, so `→` renders as an up
+   arrow and `↑` would render pointing left.
 
 ## Accessibility
 
-Keyboard-operable throughout: tab into the field for a crosshair (arrows move · Enter drops ·
-`A`/`B` switch brush). The coach strip is `aria-live`. Under `prefers-reduced-motion` Train
-renders the final boundary instantly — no information is conveyed by motion alone, and the
-training curve still plots the whole descent.
+The field is a real control, not a picture: `Tab` to it, arrow keys move a visible crosshair
+(`Shift` for fine), `Enter` drops a peach and moves focus to the label pair, `Enter` again
+labels it, `Escape` cancels. The canvas carries a written description of the picture, which
+doubles as the no-canvas fallback. Status, prompt and captions are live regions.
+
+Under `prefers-reduced-motion` the boundary lands instantly and the previous line is held
+dashed for ~1.8 s, captioned — the change is legible with zero movement.
 
 ## Develop
 
 ```bash
 npm install
 npm run dev       # http://localhost:4321
-npm test          # 56 tests — engine, presets, pacing, palette, copy
+npm test          # 56 tests — engine, field, seeds, pacing, palette, copy
 npm run build     # static output to dist/
 ```
 

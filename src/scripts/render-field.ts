@@ -1,146 +1,270 @@
 /**
- * The boundary field — the hero (spec §3). A soft diverging confidence heatmap with
- * the bright p=0.5 hairline, and the user's example points crisp on top:
- * a hard mark on a soft ground, so the DATA always reads as the ground truth.
- * Ported from the locked look reference (assets/01, graft variant).
+ * The field — the whole screen. A deep diverging confidence ground, the bright p=0.5
+ * hairline, and the user's examples crisp on top: a hard mark on a soft ground, so the
+ * DATA always reads as the ground truth.
+ *
+ * The renderer owns the offscreen grid pair and the field cache, because the settle's
+ * frame budget lives here (ticket 08, D4). Three things buy it:
+ *  - the field is computed at GRID_LO while settling, GRID_HI only on the final frame;
+ *  - the bloom is PRE-BLURRED offscreen at grid resolution, once per rebuild, instead of
+ *    a `filter: blur()` composite at full canvas size on every frame;
+ *  - the rebuild rate SELF-SCHEDULES: every frame while a rebuild is cheap, every other
+ *    frame when it is not. A fixed every-other-frame rule measured exactly 20 boundary
+ *    updates at 4× CPU — on the acceptance line with no margin for a slower phone.
+ * Old path, for reference: 326 ms per settle frame at 4×, i.e. 3 frames of choreography.
  */
-import { computeField, contourSegs, fieldToImage, GW, GH, nx, ny } from '../lib/field';
+import {
+  computeField, contourSegs, fieldToImage, nx, ny, GRID_HI, GRID_LO, type Seg,
+} from '../lib/field';
 import { LOOK, POINT_A, POINT_B } from '../lib/palette';
+import { DROP_MS } from '../lib/pacing';
+import { clamp } from '../lib/prng';
 import type { Net, Point } from '../lib/types';
+
+/** Cost ceiling for rebuilding on every settle frame, in ms. */
+const REBUILD_BUDGET_MS = 9;
 
 export interface FieldState {
   w: Net;
   data: readonly Point[];
-  trained: boolean;
-  /** 0→1 bloom-in of the field on the first Train. */
-  fieldFade: number;
-  /** 0→1 one-shot pulse of the decision line at the snap. */
-  snapPulse: number;
-  crosshair: { x: number; y: number; active: boolean; brush: 0 | 1 } | null;
-  /**
-   * Cache key for the grid forward-pass. BOTH parts are required: the epoch alone is not
-   * enough, because a new model (preset switch, added point, lr change) can land on the
-   * same epoch and would silently redraw the previous boundary under the new points.
-   */
+  /** Bumped whenever the model changed, so the grid cache can never go stale. */
   modelGen: number;
-  epoch: number;
+  settling: boolean;
+  reduced: boolean;
+  /** The mark awaiting its label, in input space. */
+  pending: readonly [number, number] | null;
+  /** Index of a committed mark being relabelled / removed, or -1. */
+  editing: number;
+  /** Start time of the drop-in ring on the most recent mark, or null. */
+  dropT0: number | null;
+  /** The keyboard crosshair — only while the field itself has focus. */
+  cursor: readonly [number, number] | null;
+  /** Reduced motion: the boundary BEFORE this example, in normalized coords. */
+  ghost: readonly Seg[] | null;
 }
 
-export function createFieldRenderer() {
-  const small = document.createElement('canvas');
-  small.width = GW;
-  small.height = GH;
-  const sctx = small.getContext('2d')!;
-  const simg = sctx.createImageData(GW, GH);
+const easeOutQuart = (t: number): number => 1 - Math.pow(1 - t, 4);
 
-  // The forward pass over the grid is the expensive part (~5–9 ms). Reuse it whenever the
-  // model has not changed — the snap pulse and crosshair repaint many times per epoch.
-  let cachedGen = Number.NaN;
-  let cachedEpoch = Number.NaN;
-  let cachedP: Float32Array | null = null;
+export interface FieldRenderer {
+  (ctx: CanvasRenderingContext2D, W: number, H: number, s: FieldState): void;
+  /** The current boundary, normalized — captured as the ghost when a new example lands. */
+  segs(): Seg[] | null;
+  /** Force a rebuild (the domain or the model changed under us). */
+  invalidate(): void;
+}
 
-  return function drawField(ctx: CanvasRenderingContext2D, FW: number, FH: number, s: FieldState): void {
-    ctx.clearRect(0, 0, FW, FH);
+export function createFieldRenderer(): FieldRenderer {
+  const grids: Record<number, {
+    cv: HTMLCanvasElement; ctx: CanvasRenderingContext2D; img: ImageData;
+    bloom: HTMLCanvasElement; bctx: CanvasRenderingContext2D;
+  }> = {};
+  const gridCv = (n: number) => {
+    let g = grids[n];
+    if (!g) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = n;
+      const ctx = cv.getContext('2d')!;
+      const bloom = document.createElement('canvas');
+      bloom.width = bloom.height = n;
+      g = grids[n] = { cv, ctx, img: ctx.createImageData(n, n), bloom, bctx: bloom.getContext('2d')! };
+    }
+    return g;
+  };
 
-    if (s.trained) {
-      let P = cachedP;
-      if (P === null || s.modelGen !== cachedGen || s.epoch !== cachedEpoch) {
-        P = computeField(s.w);
-        fieldToImage(P, simg.data, LOOK.fieldGamma);
-        sctx.putImageData(simg, 0, 0);
-        cachedP = P;
-        cachedGen = s.modelGen;
-        cachedEpoch = s.epoch;
+  let segs: Seg[] | null = null;
+  let dirty = true;
+  let builtN = 0;
+  let builtGen = Number.NaN;
+  let frameNo = 0;
+  let rebuildMs = 0;
+
+  const draw = (ctx: CanvasRenderingContext2D, W: number, H: number, s: FieldState): void => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#070910';
+    ctx.fillRect(0, 0, W, H);
+    frameNo++;
+
+    const trained = s.data.length > 0;
+    if (trained) {
+      const n = s.settling ? GRID_LO : GRID_HI;
+      const stale = dirty || builtN !== n || builtGen !== s.modelGen;
+      const affordable = !s.settling || rebuildMs < REBUILD_BUDGET_MS || frameNo % 2 === 0;
+      if (stale && affordable) {
+        const t0 = performance.now();
+        const g = gridCv(n);
+        const P = computeField(s.w, n);
+        fieldToImage(P, g.img.data, LOOK.fieldGamma);
+        g.ctx.putImageData(g.img, 0, 0);
+        g.bctx.clearRect(0, 0, n, n);
+        g.bctx.filter = `blur(${Math.max(0.4, (LOOK.bloomBlur * n) / Math.max(W, 1)).toFixed(2)}px)`;
+        g.bctx.drawImage(g.cv, 0, 0);
+        g.bctx.filter = 'none';
+        segs = contourSegs(P, n);
+        dirty = false;
+        builtN = n;
+        builtGen = s.modelGen;
+        if (s.settling) rebuildMs = performance.now() - t0;
       }
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.globalAlpha = s.fieldFade;
-      ctx.drawImage(small, 0, 0, FW, FH);
-
-      // bloom — additive blurred re-draw, so confident regions glow on the dark ground
-      if (LOOK.bloomAlpha > 0) {
+      if (builtN) {
+        const g = gridCv(builtN);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = s.settling ? 'low' : 'high';
+        ctx.drawImage(g.cv, 0, 0, W, H);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = LOOK.bloomAlpha * s.fieldFade;
-        ctx.filter = `blur(${LOOK.bloomBlur}px)`;
-        ctx.drawImage(small, 0, 0, FW, FH);
-        ctx.filter = 'none';
+        ctx.globalAlpha = LOOK.bloomAlpha;
+        ctx.drawImage(g.bloom, 0, 0, W, H);
         ctx.restore();
       }
-      ctx.globalAlpha = 1;
+    }
 
-      if (LOOK.showGrid) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(201,209,217,0.05)';
-        ctx.lineWidth = 1;
-        for (let k = 1; k < 8; k++) {
-          const gx = (FW * k) / 8;
-          const gy = (FH * k) / 8;
-          ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, FH); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(FW, gy); ctx.stroke();
-        }
-        ctx.restore();
-      }
+    // The quiet grid, so the field reads as measured space even when empty. Cells stay
+    // square whatever the box aspect, so a tall field never looks stretched.
+    ctx.save();
+    ctx.strokeStyle = `rgba(201,209,217,${trained ? 0.05 : 0.09})`;
+    ctx.lineWidth = 1;
+    const rows = Math.max(3, Math.round(H / (W / 8)));
+    for (let k = 1; k < 8; k++) {
+      const gx = (W * k) / 8;
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+    }
+    for (let k = 1; k < rows; k++) {
+      const gy = (H * k) / rows;
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    }
+    ctx.restore();
 
-      // the p=0.5 decision line — bright hot-core hairline, pulses once at the snap
-      const segs = contourSegs(P);
+    // Reduced motion: the PREVIOUS boundary, dashed — the change is visible without moving.
+    if (s.ghost) {
       ctx.save();
-      ctx.strokeStyle = `rgba(255,241,194,${0.95 * s.fieldFade})`;
-      ctx.lineWidth = 1.7 + s.snapPulse * 1.4;
-      ctx.lineCap = 'round';
-      ctx.shadowColor = 'rgba(255,241,194,0.7)';
-      ctx.shadowBlur = LOOK.lineGlow + s.snapPulse * 16;
+      ctx.strokeStyle = 'rgba(255,241,194,0.42)';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([6, 6]);
       ctx.beginPath();
-      for (const [a, b] of segs) {
-        ctx.moveTo((a[0] / GW) * FW, (a[1] / GH) * FH);
-        ctx.lineTo((b[0] / GW) * FW, (b[1] / GH) * FH);
-      }
+      for (const [a, b] of s.ghost) { ctx.moveTo(a[0] * W, a[1] * H); ctx.lineTo(b[0] * W, b[1] * H); }
       ctx.stroke();
       ctx.restore();
     }
 
-    // Spec §4.3 — Beat 1 is a genuinely empty dark stage. No ghost "+A here" target
-    // boxes: they read wizard-y and quietly turn "teach it YOUR rule" into
-    // "put A in the pre-approved A spot". The coach line + counter carry the guidance.
-
-    for (const d of s.data) {
-      const px = nx(d.x[0]) * FW;
-      const py = ny(d.x[1]) * FH;
+    // The p = 0.5 decision line.
+    if (trained && segs) {
+      const glow = s.settling ? 1 : 0;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,241,194,0.95)';
+      ctx.lineWidth = 1.9 + glow * 0.9;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(255,241,194,0.7)';
+      ctx.shadowBlur = LOOK.lineGlow + glow * 12;
       ctx.beginPath();
-      ctx.arc(px, py, LOOK.pointR + 1.6, 0, 7);
-      ctx.fillStyle = 'rgba(6,8,12,0.9)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(px, py, LOOK.pointR, 0, 7);
-      ctx.fillStyle = d.y === 0 ? POINT_A : POINT_B;
-      ctx.fill();
-      if (d.intruder) {
-        ctx.beginPath();
-        ctx.arc(px, py, LOOK.pointR + 4.5, 0, 7);
-        ctx.strokeStyle = 'rgba(255,241,194,0.6)';
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([2, 2.5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      for (const [a, b] of segs) { ctx.moveTo(a[0] * W, a[1] * H); ctx.lineTo(b[0] * W, b[1] * H); }
+      ctx.stroke();
+      ctx.restore();
     }
 
-    const c = s.crosshair;
-    if (c && c.active) {
-      const px = nx(c.x) * FW;
-      const py = ny(c.y) * FH;
-      ctx.save();
-      ctx.strokeStyle = c.brush === 0 ? POINT_A : POINT_B;
-      ctx.globalAlpha = 0.8;
-      ctx.lineWidth = 1;
+    /* The example marks. Luminance does the separating now (see FIELD_MAX), so the halo
+       and rim are back to their real job: holding the edge crisp where a mark straddles
+       the boundary seam. The two classes also get a SHAPE the field has none of — ripe is
+       a disc, not-ripe a diamond — so the reading survives colour-blindness and greyscale. */
+    const path = (px: number, py: number, r: number, kind: 0 | 1 | null): void => {
       ctx.beginPath();
-      ctx.moveTo(px - 9, py); ctx.lineTo(px + 9, py);
-      ctx.moveTo(px, py - 9); ctx.lineTo(px, py + 9);
+      if (kind === 1) {
+        const d = r * 1.18;
+        ctx.moveTo(px, py - d); ctx.lineTo(px + d, py);
+        ctx.lineTo(px, py + d); ctx.lineTo(px - d, py);
+        ctx.closePath();
+      } else {
+        ctx.arc(px, py, r, 0, 7);
+      }
+    };
+    const mark = (
+      ux: number, uy: number, color: string, r: number, ring: number,
+      kind: 0 | 1 | null, alpha: number,
+    ): void => {
+      const px = nx(ux) * W, py = ny(uy) * H;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      path(px, py, r + 1.3, kind); ctx.fillStyle = 'rgba(6,8,12,0.8)'; ctx.fill();
+      path(px, py, r, kind); ctx.fillStyle = color; ctx.fill();
+      path(px, py, r - 0.6, kind); ctx.strokeStyle = 'rgba(255,255,255,0.62)'; ctx.lineWidth = 1.1; ctx.stroke();
+      if (ring > 0) {
+        ctx.globalAlpha = alpha * (1 - ring);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6;
+        path(px, py, r + ring * 26, kind);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+    const pulse = (px: number, py: number, r: number, kind: 0 | 1 | null): void => {
+      const a = s.reduced ? 1 : 0.72 + 0.28 * Math.sin(performance.now() / 260);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = 'rgba(255,241,194,0.95)';
+      ctx.lineWidth = 1.4;
+      path(px, py, r, kind);
       ctx.stroke();
-      ctx.globalAlpha = 0.25;
-      ctx.beginPath(); ctx.arc(px, py, 7, 0, 7); ctx.stroke();
+      ctx.restore();
+    };
+
+    // While a mark is awaiting its label the committed ones step back, so "that one" has
+    // exactly one possible referent.
+    const armed = s.pending !== null || s.editing >= 0;
+    const last = s.data.length - 1;
+    s.data.forEach((d, i) => {
+      let r = LOOK.pointR;
+      let ring = 0;
+      if (s.dropT0 !== null && i === last && !s.reduced) {
+        const t = clamp((performance.now() - s.dropT0) / DROP_MS, 0, 1);
+        r = LOOK.pointR * (0.2 + 0.8 * easeOutQuart(t));
+        ring = t < 1 ? t : 0;
+      }
+      const sel = i === s.editing;
+      if (sel) r = LOOK.pointR * 1.15;
+      mark(d.x[0], d.x[1], d.y === 0 ? POINT_A : POINT_B, r, ring, d.y, armed && !sel ? 0.34 : 1);
+      if (sel) pulse(nx(d.x[0]) * W, ny(d.x[1]) * H, LOOK.pointR + 8, d.y);
+    });
+
+    /* The pending mark gets the FULL mark treatment, in the cream the boundary line uses —
+       a colour no ground occupies. It used to be the one mark drawn without it: a pale
+       ~2.2:1 ring that could land 6 px from a seed and read as just another dot, leaving
+       "Was that one ripe?" with no locatable referent. */
+    if (s.pending) {
+      const px = nx(s.pending[0]) * W, py = ny(s.pending[1]) * H;
+      const a = s.reduced ? 1 : 0.72 + 0.28 * Math.sin(performance.now() / 260);
+      mark(s.pending[0], s.pending[1], '#fff1c2', LOOK.pointR, 0, null, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = 'rgba(255,241,194,0.9)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 9, 0, 7); ctx.stroke();
+      ctx.globalAlpha = a * 0.45;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 16, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
+
+    // The keyboard crosshair. Only drawn while the field has focus, so it never competes
+    // with the pointer path.
+    if (s.cursor && !s.pending) {
+      const px = nx(s.cursor[0]) * W, py = ny(s.cursor[1]) * H;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(76,201,240,0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, py); ctx.lineTo(W, py);
+      ctx.moveTo(px, 0); ctx.lineTo(px, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(76,201,240,0.95)';
+      ctx.beginPath(); ctx.arc(px, py, LOOK.pointR + 3, 0, 7); ctx.stroke();
       ctx.restore();
     }
   };
+
+  const renderer = draw as FieldRenderer;
+  renderer.segs = () => segs;
+  renderer.invalidate = () => { dirty = true; };
+  return renderer;
 }

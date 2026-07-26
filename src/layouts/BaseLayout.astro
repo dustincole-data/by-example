@@ -1,7 +1,6 @@
 ---
 import '../styles/tokens.css';
 import '../styles/global.css';
-import { TITLE } from '../lib/copy';
 
 interface Props {
   title: string;
@@ -15,7 +14,9 @@ const og = new URL('/og.png', Astro.site).href;
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover: the field is full-bleed, so the chip and the card position
+         themselves off env(safe-area-inset-*) rather than under the sensor housing. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -30,9 +31,5 @@ const og = new URL('/og.png', Astro.site).href;
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <main id="main" class="stack"><slot /></main>
-    <footer class="site-foot">
-      <span>{TITLE}</span>
-      <a href="https://dustincoledata.com">dustincoledata.com</a>
-    </footer>
   </body>
 </html>

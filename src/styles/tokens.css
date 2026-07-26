@@ -26,10 +26,16 @@
   --coral: #ff5a5f;
   --hotcore: #fff1c2;
 
+  /* The example marks — POINT_A / POINT_B in palette.ts, mirrored here for the legend
+     dots inside the label buttons. Class is also carried by SHAPE (disc / diamond), so
+     nothing rides on hue alone. */
+  --pt-a: #3fe0aa;
+  --pt-b: #ff9a52;
+
   /* Type — small and restrained. Biggest heading 28–32px. NEVER a billboard. */
   --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
   --r: 10px;
-  --maxw: 1120px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quart */
 }

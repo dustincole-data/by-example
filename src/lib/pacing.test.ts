@@ -1,85 +1,71 @@
 import { describe, it, expect } from 'vitest';
-import { planRun, MIN_WIN, MAX_WIN, TAIL, ONRAMP_DUR, SNAP_SETTLE } from './pacing';
-import { train, SEED, LR_ONRAMP } from './net';
-import { moons } from './presets';
+import { SETTLE_MS, EPOCH_RATE, SETTLE_EPOCHS, epochsBy, MOVED_FRAC } from './pacing';
+import { initNet, step, SEED, LR } from './net';
+import { computeField, signOf, syncDomain, GRID_LO } from './field';
 import type { Point } from './types';
 
-const A = (x: number, y: number): Point => ({ x: [x, y], y: 0 });
-const B = (x: number, y: number): Point => ({ x: [x, y], y: 1 });
-
-/**
- * The eight placements spec §4.4 verified the derived window against. These are
- * HAND-PLACED sets, which is the only thing the on-ramp ever trains on — the
- * presets are sandbox-only and always play the full 240-epoch run.
- */
-const PLACEMENTS: [string, Point[]][] = [
-  ['textbook', [A(-0.5, 0.4), A(-0.35, 0.6), A(-0.6, 0.25), B(0.45, -0.4), B(0.6, -0.2), B(0.3, -0.55)]],
-  ['close together', [A(-0.12, 0.1), A(-0.18, 0.02), A(-0.08, 0.18), B(0.12, -0.1), B(0.18, -0.02), B(0.08, -0.18)]],
-  ['vertical', [A(-0.4, 0.6), A(0.0, 0.6), A(0.4, 0.6), B(-0.4, -0.6), B(0.0, -0.6), B(0.4, -0.6)]],
-  ['interleaved', [A(-0.4, 0.1), A(0.0, 0.15), A(0.4, 0.1), B(-0.4, -0.1), B(0.0, -0.15), B(0.4, -0.1)]],
-  ['1 + 1', [A(-0.5, 0.5), B(0.5, -0.5)]],
-  ['lopsided', [A(-0.6, 0.5), A(-0.4, 0.3), A(-0.55, 0.15), A(-0.3, 0.55), A(-0.45, 0.42), B(0.5, -0.45)]],
-  ['many points', Array.from({ length: 24 }, (_, i) =>
-    i % 2 === 0 ? A(-0.3 - (i / 24) * 0.4, 0.3 + (i / 48)) : B(0.3 + (i / 24) * 0.4, -0.3 - (i / 48))),
-  ],
-  ['beat-3 intruder', [A(-0.5, 0.4), A(-0.35, 0.6), A(-0.6, 0.25), B(0.45, -0.4), B(0.6, -0.2), B(0.3, -0.55), A(0.5, -0.35)]],
-];
-
-describe('the snap is a real model event (spec §4.4)', () => {
-  it('fires at the first epoch confidence reaches 95% of the run’s final value', () => {
-    const hist = train(PLACEMENTS[0]![1], LR_ONRAMP, SEED);
-    const { snapEpoch } = planRun(hist);
-    const target = SNAP_SETTLE * hist[hist.length - 1]!.conf;
-    expect(hist[snapEpoch]!.conf).toBeGreaterThanOrEqual(target);
-    expect(hist[snapEpoch - 1]!.conf).toBeLessThan(target);
+describe('the settle window', () => {
+  it('runs 200 epochs across 800 ms', () => {
+    expect(SETTLE_MS).toBe(800);
+    expect(SETTLE_EPOCHS).toBe(200);
+    expect(SETTLE_MS * EPOCH_RATE).toBe(SETTLE_EPOCHS);
   });
 
-  it('is NOT accuracy — accuracy pins at 1.00 long before the boundary settles', () => {
-    // The textbook placement is the case §4.4 measured: an 8-unit tanh net separates
-    // two blobs essentially at init, so an `acc ≥ 0.90` trigger fired at epoch 1 of 240.
-    expect(train(PLACEMENTS[0]![1], LR_ONRAMP, SEED)[2]!.acc).toBe(1);
-
-    for (const [name, data] of PLACEMENTS) {
-      const hist = train(data, LR_ONRAMP, SEED);
-      // accuracy is a spent signal — it reaches its final value and then sits there,
-      // long before confidence settles. Only confidence still moves at the snap.
-      const finalAcc = hist[hist.length - 1]!.acc;
-      const accEpoch = hist.findIndex((h) => h.acc === finalAcc);
-      expect(accEpoch, name).toBeLessThan(planRun(hist).snapEpoch);
+  /*
+    Paced by ELAPSED TIME, not by frame count and not eased: a 30 fps phone and a 120 Hz
+    desktop must see the same choreography, and a dropped frame must skip epochs rather
+    than stretch the run. Easing the epochs over the window double-counts the ease —
+    gradient descent already decelerates — and read as a snap (ticket 08).
+  */
+  it('is frame-rate independent — the epoch shown is a pure function of elapsed time', () => {
+    for (const fps of [30, 60, 120]) {
+      const dt = 1000 / fps;
+      let t = 0;
+      let last = 0;
+      while (t < SETTLE_MS) { t += dt; last = epochsBy(t); }
+      expect(last).toBe(SETTLE_EPOCHS);
     }
+    expect(epochsBy(SETTLE_MS / 2)).toBe(SETTLE_EPOCHS / 2);
+  });
+
+  it('is linear in time, so the second half still moves pixels', () => {
+    const firstHalf = epochsBy(SETTLE_MS / 2);
+    expect(epochsBy(SETTLE_MS) - firstHalf).toBe(firstHalf);
+  });
+
+  it('never runs past the window or before it starts', () => {
+    expect(epochsBy(-50)).toBe(0);
+    expect(epochsBy(SETTLE_MS * 10)).toBe(SETTLE_EPOCHS);
   });
 });
 
-describe('the playback window is derived from the snap, not fixed (spec §4.4)', () => {
-  for (const [name, data] of PLACEMENTS) {
-    it(`${name}: the snap lands ~59% through the window, inside it every time`, () => {
-      const { snapEpoch, rampEnd, rampEps } = planRun(train(data, LR_ONRAMP, SEED));
-      expect(rampEnd).toBeGreaterThanOrEqual(MIN_WIN);
-      expect(rampEnd).toBeLessThanOrEqual(MAX_WIN);
-      expect(snapEpoch).toBeLessThanOrEqual(rampEnd);
-      // wall-clock: the window plays over ONRAMP_DUR at a constant rate
-      expect(rampEnd / rampEps).toBeCloseTo(ONRAMP_DUR, 6);
-      // the snap must be legible: never in the first 15% or the last 10% of playback
-      const frac = snapEpoch / rampEnd;
-      expect(frac, name).toBeGreaterThan(0.15);
-      expect(frac, name).toBeLessThanOrEqual(0.9);
-    });
-  }
+/*
+  "Moved the line" replaced self-graded training-set accuracy, which read "gets all N
+  right" almost always and so carried near-zero information. It compares the 64² class map
+  before and after the settle: cheap, and the honest answer to what the machine just learned.
+*/
+describe('MOVED_FRAC — did the boundary actually move?', () => {
+  const base: Point[] = [
+    { x: [0.6, 0.5], y: 0 }, { x: [0.8, 0.35], y: 0 },
+    { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 },
+  ];
+  const flipped = (next: Point[]): number => {
+    syncDomain(1, 1);
+    const w = initNet(SEED);
+    for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, base, LR);
+    const before = signOf(computeField(w, GRID_LO));
+    for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, next, LR);
+    const after = signOf(computeField(w, GRID_LO));
+    let n = 0;
+    for (let i = 0; i < after.length; i++) if (after[i] !== before[i]) n++;
+    return n / after.length;
+  };
 
-  it('sizes the window to TAIL × snapEpoch when that lands inside the clamp', () => {
-    for (const [name, data] of PLACEMENTS) {
-      const { snapEpoch, rampEnd } = planRun(train(data, LR_ONRAMP, SEED));
-      const raw = Math.round(TAIL * snapEpoch);
-      if (raw >= MIN_WIN && raw <= MAX_WIN) expect(rampEnd, name).toBe(raw);
-    }
+  it('fires on an example that contradicts the rule so far', () => {
+    expect(flipped([...base, { x: [0.7, 0.6], y: 1 }])).toBeGreaterThan(MOVED_FRAC);
   });
 
-  it('clamps rather than running long on a set that settles very slowly', () => {
-    // moons at the on-ramp lr settles around epoch ~190 — well past MAX_WIN. The window
-    // clamps, so the snap falls outside it; the controller fires the payoff at window end
-    // instead (`if (!snapFired) onSnap()`), so no beat can ever hang waiting for it.
-    const { snapEpoch, rampEnd } = planRun(train(moons(SEED), LR_ONRAMP, SEED));
-    expect(snapEpoch).toBeGreaterThan(MAX_WIN);
-    expect(rampEnd).toBe(MAX_WIN);
+  it('stays quiet when the same examples simply settle further', () => {
+    expect(flipped(base)).toBeLessThanOrEqual(MOVED_FRAC);
   });
 });

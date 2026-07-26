@@ -1,93 +1,46 @@
 ---
 /*
-  The instrument (spec §3): boundary field (hero) + mechanism net + training curve
-  + mono readouts + control bar, wrapped in the on-ramp's coach strip (§4).
-  Markup ported from the locked references; the controller wires it in src/scripts.
+  One screen (tickets 07 + 08): a full-bleed field with the chrome floating over it, and a
+  card at the bottom holding the question, the two labels and the strip.
+
+  Two things in here are load-bearing and look like typos:
+   - the axis glyphs are both `→`. The Y label is rendered rotate(-90deg), which maps the
+     text's own +x onto screen-up, so `→` RENDERS as an up arrow and `↑` would point left.
+   - the axis spans and the net canvas are aria-hidden. The field's own label names both
+     axes in words, which removes two orphan labels and the "how soft right arrow"
+     announcement; the net's caption does its naming in plain English.
 */
-import { TITLE, SPEC_LINE } from '../lib/copy';
-import { PRESETS } from '../lib/presets';
+import {
+  AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE, NET_CAPTION, RESET, REMOVE, FIELD_ARIA,
+} from '../lib/copy';
 ---
 
 <section class="instrument">
-  <div class="inst-head">
-    <div class="inst-title">
-      <h1>{TITLE}</h1>
-      <span class="sci">{SPEC_LINE}</span>
-    </div>
-    <span class="badge">on-ramp</span>
-  </div>
-  <div class="divider"></div>
-
-  <div class="coach" aria-live="polite">
-    <div class="lead">
-      <p class="ckick">
-        <span class="ckickt">Beat 1 / 3 · Give it examples</span>
-        <span class="dots"><i class="on"></i><i></i><i></i></span>
-      </p>
-      <p class="cline">Give it a few examples of each class.</p>
-      <p class="csub">
-        Brush is on <b class="kA">+A</b> — click a few spots. Then switch to <b class="kB">+B</b> and click
-        somewhere else. No boundary yet — just your examples.
-      </p>
-    </div>
-    <div class="cact">
-      <button class="skip" type="button">Skip the tour →</button>
-      <button class="btn go cnext" type="button" disabled>Next →</button>
-    </div>
+  <div class="fieldwrap">
+    <canvas class="fieldcanvas" tabindex="0" role="application" aria-label={FIELD_ARIA}
+      ><p class="fieldalt"></p></canvas
+    >
+    <span class="ax ax-x" aria-hidden="true">{AXIS_X}</span>
+    <span class="ax ax-y" aria-hidden="true">{AXIS_Y}</span>
+    <span class="chip" role="status"></span>
   </div>
 
-  <div class="panels">
-    <div class="panel field">
-      <div
-        class="fieldwrap"
-        tabindex="0"
-        role="application"
-        aria-label="teaching field — arrow keys move the crosshair, Enter drops a point of the active brush"
-      >
-        <span class="panel-tag">boundary field · p(class B)</span>
-        <canvas class="fieldcanvas"></canvas>
-        <span class="kbdhint">← ↑ ↓ → move · Enter drop · A / B switch brush</span>
-      </div>
+  <div class="card">
+    <div class="askrow">
+      <span class="ask" role="status"></span>
+      <button class="rmv" type="button" hidden>{REMOVE}</button>
     </div>
-    <div class="col">
-      <div class="subpanel net panel">
-        <span class="panel-tag">mechanism · net</span>
-        <canvas class="netcanvas"></canvas>
-      </div>
-      <div class="subpanel curve panel">
-        <span class="panel-tag r">training curve</span>
-        <canvas class="curvecanvas"></canvas>
-      </div>
+    <div class="pair">
+      <button class="lab rest" type="button" data-c="a" data-k="0"><i class="dot"></i>{LABEL_RIPE}</button>
+      <button class="lab rest" type="button" data-c="b" data-k="1"><i class="dot"></i>{LABEL_NOT_RIPE}</button>
     </div>
-  </div>
-
-  <div class="controls">
-    <div class="brushes">
-      <button class="btn brush on A" type="button" data-brush="0">+ A</button>
-      <button class="btn brush B" type="button" data-brush="1">+ B</button>
+    <div class="strip">
+      <span class="spacer"></span>
+      <canvas class="netcanvas" aria-hidden="true"></canvas>
+      <span class="spec">{NET_CAPTION}</span>
+      <button class="over" type="button">{RESET}</button>
     </div>
-    <button class="btn go" type="button" data-act="train">▷ Train</button>
-    <button class="btn sandbox-only" type="button" data-act="step">⇥ Step</button>
-    <button class="btn sandbox-only" type="button" data-act="reset">↺ Reset</button>
-    <button class="btn sandbox-only" type="button" data-act="clear">⌫ Clear</button>
-    <div class="ctl sandbox-only">
-      <label for="lr">lr</label>
-      <input id="lr" class="lr" type="range" min="0.05" max="3" step="0.05" value="0.55" />
-      <span class="val lrval">0.55</span>
-    </div>
-    <div class="presetrow">
-      <label>preset</label>
-      {PRESETS.map((p) => (
-        <button class="btn" type="button" data-preset={p.key}>{p.label}</button>
-      ))}
-    </div>
-    <div class="spacer"></div>
-    <div class="readout">
-      <span class="r">examples <b class="ex">0</b></span>
-      <span class="r acc">accuracy <b class="ac">—</b></span>
-      <span class="r">loss <b class="ls">—</b></span>
-      <span class="r">epoch <b class="ep">—</b></span>
-    </div>
+    <p class="rmnote" role="status" hidden></p>
   </div>
 </section>
 

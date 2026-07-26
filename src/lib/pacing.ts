@@ -1,46 +1,46 @@
 /**
- * The snap, and the playback window derived from it (spec §4.4).
+ * The timings — above all, how long the settle lasts and what paces it.
  *
- * The snap is a REAL model event: the first epoch where mean confidence reaches 95%
- * of the run's final confidence — i.e. the epoch the boundary settles. It is NOT
- * accuracy: with hand-placed points accuracy hits 1.00 by epoch 1–2 at every dataset
- * size, so an accuracy trigger fired at epoch 1 of 240, before the field had bloomed.
+ * The settle is the whole thesis of the toy: with the Train button cut (ticket 07), the
+ * boundary re-forming on its own is the ONLY evidence the machine learned anything. Two
+ * obvious schedules were measured and rejected (ticket 08):
  *
- * A FIXED playback window was measured to break — well-separated points snapped at
- * 0.5s, interleaved points never snapped inside the window at all. So the window is
- * sized to the snap epoch instead. Only the playback RATE adapts; the epoch the model
- * actually settles on is untouched. That is choosing a playback speed, not faking an event.
+ *  (a) epochs eased over the window — double-counts the ease, because gradient descent
+ *      already decelerates. ~55% of the learning landed in the first 180 ms; it read as
+ *      a snap, not a settle.
+ *  (b) run until the weights stop moving — weight decay leaves a slow drift that never
+ *      crosses a fixed epsilon, and it crosses LATER for an agreeing tap (still .0054 at
+ *      1409 ms) than for a contradicting one (.005 by 206 ms). Exactly backwards.
+ *
+ * Shipped: a fixed window with epochs paced by ELAPSED TIME, so a 30 fps phone and a
+ * 120 Hz desktop see the same choreography — a dropped frame skips epochs rather than
+ * stretching the run.
  */
-import { clamp } from './prng';
-import type { Snapshot } from './types';
 
-export const SNAP_SETTLE = 0.95;
-/** Seconds of playback for the whole Beat-2/3 descent. */
-export const ONRAMP_DUR = 2.4;
-/** window = TAIL × snapEpoch → the snap sits ~59% through the window. */
-export const TAIL = 1.7;
-export const MIN_WIN = 20;
-export const MAX_WIN = 140;
+/** Length of the visible re-settle. */
+export const SETTLE_MS = 800;
+/** Epochs per millisecond → 200 epochs across the window. */
+export const EPOCH_RATE = 0.25;
+/** Reduced motion runs the same total, instantly. */
+export const SETTLE_EPOCHS = Math.round(SETTLE_MS * EPOCH_RATE);
 
-export interface RunPlan {
-  /** The real model event: the epoch the boundary settles. */
-  snapEpoch: number;
-  /** Last epoch of the on-ramp playback window. */
-  rampEnd: number;
-  /** Playback rate in epochs/second so the window plays over ONRAMP_DUR. */
-  rampEps: number;
-}
+/** Epochs that should have run by `elapsed` ms into the settle. */
+export const epochsBy = (elapsed: number): number =>
+  Math.min(SETTLE_EPOCHS, Math.max(0, Math.round(elapsed * EPOCH_RATE)));
 
-export function planRun(hist: readonly Snapshot[]): RunPlan {
-  const last = hist.length - 1;
-  const target = SNAP_SETTLE * hist[last]!.conf;
-  let snapEpoch = 1;
-  for (let e = 1; e <= last; e++) {
-    if (hist[e]!.conf >= target) {
-      snapEpoch = e;
-      break;
-    }
-  }
-  const rampEnd = clamp(Math.round(TAIL * snapEpoch), MIN_WIN, MAX_WIN);
-  return { snapEpoch, rampEnd, rampEps: rampEnd / ONRAMP_DUR };
-}
+/**
+ * Fraction of the 64² class map that must flip for the settle to have "moved the line".
+ * Cheap, and the honest answer to *what did the machine just learn* — which self-graded
+ * training-set accuracy could not give (it read "gets all N right" almost always).
+ */
+export const MOVED_FRAC = 0.004;
+
+/** How long the "moved the line" status holds. */
+export const MOVED_MS = 1700;
+/** How long the reduced-motion ghost of the previous boundary is held. Its caption is
+ *  driven off THIS expiry, never off "a ghost object once existed". */
+export const GHOST_MS = 1800;
+/** The drop-in ring on a freshly committed mark. */
+export const DROP_MS = 380;
+/** `reset` is one unconfirmed tap in the thumb zone, so it offers undo instead of a dialog. */
+export const UNDO_MS = 6000;

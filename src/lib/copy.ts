@@ -1,87 +1,79 @@
 /**
- * The locked copy (spec §4.2, §4.6, §12.1). Verbatim — do not reword.
+ * The copy. Fewest words in the portfolio — the screen has one gesture, so the words
+ * only have to name what you are looking at and say what just changed.
  *
- * Register: narrates the CONCEPT, never Dustin. Zero self-promo, no anthropomorphising,
+ * Register: narrates the CONCEPT, never Dustin. No self-promo, no anthropomorphising,
  * no "AI magic". Light, a little dry.
  *
- * Beats stay strictly factual/observational; the thesis is the ONLY line that generalises.
- * (An earlier draft had beats 2 and 3 each delivering the thesis, so the thesis was its
- * third restatement and landed flat.)
+ * Two strings here are load-bearing and were wrong before ticket 11 measured them:
+ *  - the Y axis says `how soft`, not `how firm`. The old wording made the seeds assert
+ *    *firm = ripe*, contradicting the one thing a first-timer knows about fruit.
+ *  - its glyph is `→`, never `↑`. The label is rendered `rotate(-90deg)`, which maps the
+ *    text's own +x onto screen-up, so `→` RENDERS as an up arrow and `↑` would render
+ *    pointing left. Building the arrow literally is a bug.
  */
 
-/** Stage title block — no English descriptor under it; the mono spec line answers "what is this". */
 export const TITLE = 'By Example';
-export const SPEC_LINE = '2→8→1 MLP · tanh · gradient descent';
 
 /** <title> / OG / meta / repo description / the dustincoledata /projects card. */
-export const TAGLINE = 'Drop labeled points. Watch a machine find the rule.';
-export const META_DESCRIPTION = `${TAGLINE} A real 2→8→1 neural net, trained live in your browser.`;
+export const TAGLINE = 'Tap anywhere. It figures out the rule.';
+export const META_DESCRIPTION =
+  `${TAGLINE} Teach a real 2→8→1 neural net which peaches are ripe, one tap at a time.`;
 
-const kA = '<b class="kA">+A</b>';
-const kB = '<b class="kB">+B</b>';
+/** The axis gutters. Both are `aria-hidden` — the field's own label names them in words. */
+export const AXIS_X = 'how sweet →';
+export const AXIS_Y = 'how soft →';
 
-export type BeatId = 'beat1' | 'beat2' | 'beat3';
-export type BeatState = 'prompt' | 'payoff';
+export const LABEL_RIPE = 'ripe';
+export const LABEL_NOT_RIPE = 'not ripe';
 
-export interface Beat {
-  kick: string;
-  prompt: { line: string; sub: string };
-  payoff: { line: string; sub: string };
-}
+/** `2→8→1 MLP` was an undefined acronym next to an unnamed 74×30 picture. Same width, readable. */
+export const NET_CAPTION = '2 in → 8 → 1 guess';
+
+export const RESET = 'reset';
+export const UNDO = 'undo';
+export const REMOVE = 'remove';
 
 /**
- * `reduced` swaps Beat 2's sub-line: a reduced-motion user never sees the descent,
- * so never describe an animation they will not see (spec §4.8).
+ * The prompt above the label pair. It grows into the question at the moment it matters —
+ * the second tap IS the teaching moment, which is the on-ramp delivered as meaning
+ * rather than as a tour.
  */
-export function beatScript(reduced: boolean): Record<BeatId, Beat> {
-  return {
-    beat1: {
-      kick: 'Beat 1 / 3 · Give it examples',
-      prompt: {
-        line: 'Give it a few examples of each class.',
-        sub: `Brush is on ${kA} — click a few spots. Then switch to ${kB} and click somewhere else. No boundary yet — just your examples.`,
-      },
-      payoff: {
-        line: 'That’s the whole dataset — {n} points and two labels.',
-        sub: 'This is everything the machine gets to see. Nothing else.',
-      },
-    },
-    beat2: {
-      kick: 'Beat 2 / 3 · Watch it learn',
-      prompt: {
-        line: 'Press Train.',
-        sub: reduced
-          ? 'Gradient descent runs on your examples — the curve records the whole descent.'
-          : 'Gradient descent, running live: the field fills in, the boundary bends, loss falls.',
-      },
-      payoff: {
-        line: 'It found a boundary that separates them — and you never wrote one.',
-        sub: 'That bright line is the rule it settled on.',
-      },
-    },
-    beat3: {
-      kick: 'Beat 3 / 3 · Teach it a lesson',
-      prompt: {
-        line: `Now contradict it: drop a ${kA} deep in the B cluster, then Train again.`,
-        sub: 'One example that breaks the pattern.',
-      },
-      payoff: {
-        line: 'The boundary bent to fit your new example.',
-        sub: 'No code changed. The examples changed, so the rule changed.',
-      },
-    },
-  };
-}
+export const ASK = {
+  rest: 'tap anywhere to add a peach',
+  armed: 'Was that one ripe?',
+  editing: 'Change that one?',
+  /** A resting label button answers instead of doing nothing — it is the only colour
+   *  legend on screen and the most button-shaped thing on it, so it gets tapped first. */
+  needPoint: 'tap the field first — then say which it is',
+} as const;
 
-/** The thesis — inline, once. The only line in the piece that generalises. */
-export const THESIS_HTML =
-  'You give the examples. <span class="g">The machine finds the rule.</span> That’s all training is.';
+/**
+ * The floating status chip. It opens as the thesis (the screen would otherwise have
+ * nothing on it that says what this is), reports the learning while it happens, says what
+ * CHANGED, and only falls back to a count when there is nothing more interesting to say.
+ */
+export const CHIP = {
+  thesis: 'tap anywhere. it figures out the rule.',
+  learning: 'learning…',
+  moved: 'moved the line',
+  empty: 'no examples yet — tap anywhere to add a peach',
+  allRipe: 'it thinks everything is ripe',
+  noneRipe: 'it thinks nothing is ripe',
+  missed: (missed: number, n: number): string => `can't fit ${missed} of your ${n}`,
+  count: (n: number, ripe: number): string => `${n} peaches · ${ripe} ripe`,
+} as const;
 
-/** Beat-1 gate (spec §4.2): three of each before Next unlocks. */
-export const NEED_A = 3;
-export const NEED_B = 3;
+/** Reduced motion: the previous boundary is held dashed, so the change is legible with
+ *  zero movement. The note expires WITH the ghost it names. */
+export const RM_NOTE = 'dashed = the line before your peach';
 
-export const nudgeA = (n: number): string => `Brush is on ${kA} — a few more. (${n}/${NEED_A})`;
-export const nudgeB = (n: number): string =>
-  `Good. Now switch to ${kB} and click somewhere else. (${n}/${NEED_B})`;
-export const NEED_BOTH = 'need at least one +A and one +B first';
+/** The field is a real control, so it states the whole key path (spec §Accessibility). */
+export const FIELD_ARIA =
+  'Peach field. Left to right is how sweet, bottom to top is how soft. ' +
+  'Arrow keys move the crosshair, Enter drops a peach, then choose ripe or not ripe. Escape cancels.';
+
+/** A real description of the picture, inside the canvas — also the no-canvas fallback. */
+export const fieldAlt = (n: number, status: string): string =>
+  `${n} labelled peaches on a field of how sweet (left to right) by how soft (bottom to top), ` +
+  `with the machine's ripe / not-ripe boundary drawn through them. ${status.replace(/\.$/, '')}.`;

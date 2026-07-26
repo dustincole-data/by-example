@@ -1,22 +1,29 @@
 /**
- * The ML — real, not faked (spec §5, engine LOCKED by ticket 02).
- * Hand-rolled MLP 2 → 8 → 1, tanh hidden + sigmoid output, binary cross-entropy,
- * full-batch gradient descent. Zero dependencies; arithmetic order is preserved
- * verbatim from the locked prototypes so runs stay bit-for-bit reproducible.
+ * The ML — real, not faked. Hand-rolled MLP 2 → 8 → 1, tanh hidden + sigmoid output,
+ * binary cross-entropy, full-batch gradient descent. Zero dependencies; arithmetic order
+ * is preserved verbatim from the locked prototypes so runs stay bit-for-bit reproducible.
+ *
+ * Training is CONTINUOUS (ticket 07): there is no Train button, no epoch budget and no
+ * recorded history. Every example the user drops re-settles the SAME live weights in place.
  */
 import { mulberry32, gauss, clamp } from './prng';
-import type { Net, Point, Snapshot } from './types';
+import type { Net, Point } from './types';
 
-/** Hidden width — LOCKED at 8 (ticket 04). Also = how many nodes the net panel draws. */
+/** Hidden width — LOCKED at 8. Also = how many nodes the net diagram draws. */
 export const HID = 8;
-/** Epoch budget for a full sandbox Train. */
-export const EPOCHS = 240;
 /** The demo seed. Fixed training order + seeded init → reproducible. */
 export const SEED = 0x7eac;
-/** Learning rate: the on-ramp trains at the value its choreography was measured against… */
-export const LR_ONRAMP = 0.55;
-/** …the sandbox is revealed at 1.5, where all four presets converge on every seed (ticket 04). */
-export const LR_SANDBOX = 1.5;
+/** Learning rate. One value now — the on-ramp that had its own rate is gone. */
+export const LR = 1.5;
+
+/**
+ * L2 weight decay — REQUIRED by continuous training, and the whole reason this differs
+ * from a train-from-scratch engine (ticket 08, engine finding 1). Without it every tap
+ * drives |w| up until confidence saturates: the field flattens to two flat poles, the
+ * marks vanish into ground of their own colour, and the boundary stops visibly moving.
+ * Decay bounds |w|, so tap #20 still bends the line.
+ */
+export const WD = 0.02;
 
 const sig = (z: number): number => 1 / (1 + Math.exp(-z));
 
@@ -35,7 +42,7 @@ export function initNet(seed: number): Net {
   return { W1, b1, W2, b2: 0 };
 }
 
-/** Forward pass. Returns the hidden activations (the net panel reads these) and p(class B). */
+/** Forward pass. Returns the hidden activations (the net diagram reads these) and p(not ripe). */
 export function forward(w: Net, x: readonly [number, number]): { a1: number[]; p: number } {
   const a1 = new Array<number>(HID);
   let z2 = w.b2;
@@ -57,60 +64,51 @@ export function cloneNet(w: Net): Net {
 }
 
 /**
- * The model's real metrics. `conf` = mean confidence |p−0.5|×2 — the quantity the
- * snap is measured on (spec §4.4: accuracy is pinned at 1.00 by epoch 1–2 on
- * hand-placed points, so it cannot mark the moment the boundary settles).
+ * The model's real metrics. `correct` is what the status line reports as
+ * "can't fit N of your M" — the only honest thing training-set counts can say.
  */
-export function metrics(w: Net, data: readonly Point[]): { loss: number; acc: number; conf: number } {
+export function metrics(w: Net, data: readonly Point[]): { loss: number; correct: number } {
   let loss = 0;
   let correct = 0;
-  let conf = 0;
   for (const d of data) {
     const { p } = forward(w, d.x);
     const y = d.y;
     loss += -(y * Math.log(clamp(p, 1e-7, 1)) + (1 - y) * Math.log(clamp(1 - p, 1e-7, 1)));
     if ((p >= 0.5 ? 1 : 0) === y) correct++;
-    conf += Math.abs(p - 0.5) * 2;
   }
-  const n = data.length || 1;
-  return { loss: loss / n, acc: correct / n, conf: conf / n };
+  return { loss: loss / (data.length || 1), correct };
 }
 
 /**
- * Full-batch gradient descent. Records a snapshot BEFORE each step, so
- * `hist[0]` is the untrained init and `hist[EPOCHS]` is the converged model.
+ * One full-batch gradient-descent epoch, IN PLACE — the continuous-training form.
+ * The decay factor `k` is applied to the weights only, never the biases: decaying a
+ * bias would drag the boundary toward the origin rather than just bounding |w|.
  */
-export function train(data: readonly Point[], lr: number, seed: number, epochs = EPOCHS): Snapshot[] {
-  const w = initNet(seed);
-  const hist: Snapshot[] = [];
-  for (let e = 0; e <= epochs; e++) {
-    const m = metrics(w, data);
-    hist.push({ w: cloneNet(w), acc: m.acc, loss: m.loss, conf: m.conf });
-
-    const gW1: [number, number][] = Array.from({ length: HID }, () => [0, 0] as [number, number]);
-    const gb1 = new Array<number>(HID).fill(0);
-    const gW2 = new Array<number>(HID).fill(0);
-    let gb2 = 0;
-    for (const d of data) {
-      const { a1, p } = forward(w, d.x);
-      const dz2 = p - d.y;
-      gb2 += dz2;
-      for (let j = 0; j < HID; j++) {
-        gW2[j]! += dz2 * a1[j]!;
-        const dz1 = dz2 * w.W2[j]! * (1 - a1[j]! * a1[j]!);
-        gW1[j]![0] += dz1 * d.x[0];
-        gW1[j]![1] += dz1 * d.x[1];
-        gb1[j]! += dz1;
-      }
-    }
-    const n = data.length || 1;
+export function step(w: Net, data: readonly Point[], lr: number): void {
+  if (!data.length) return;
+  const gW1: [number, number][] = Array.from({ length: HID }, () => [0, 0] as [number, number]);
+  const gb1 = new Array<number>(HID).fill(0);
+  const gW2 = new Array<number>(HID).fill(0);
+  let gb2 = 0;
+  for (const d of data) {
+    const { a1, p } = forward(w, d.x);
+    const dz2 = p - d.y;
+    gb2 += dz2;
     for (let j = 0; j < HID; j++) {
-      w.W2[j]! -= (lr * gW2[j]!) / n;
-      w.b1[j]! -= (lr * gb1[j]!) / n;
-      w.W1[j]![0] -= (lr * gW1[j]![0]) / n;
-      w.W1[j]![1] -= (lr * gW1[j]![1]) / n;
+      gW2[j]! += dz2 * a1[j]!;
+      const dz1 = dz2 * w.W2[j]! * (1 - a1[j]! * a1[j]!);
+      gW1[j]![0] += dz1 * d.x[0];
+      gW1[j]![1] += dz1 * d.x[1];
+      gb1[j]! += dz1;
     }
-    w.b2 -= (lr * gb2) / n;
   }
-  return hist;
+  const n = data.length;
+  const k = 1 - lr * WD;
+  for (let j = 0; j < HID; j++) {
+    w.W2[j]! = w.W2[j]! * k - (lr * gW2[j]!) / n;
+    w.b1[j]! -= (lr * gb1[j]!) / n;
+    w.W1[j]![0] = w.W1[j]![0] * k - (lr * gW1[j]![0]) / n;
+    w.W1[j]![1] = w.W1[j]![1] * k - (lr * gW1[j]![1]) / n;
+  }
+  w.b2 -= (lr * gb2) / n;
 }

@@ -1,30 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import {
-  TITLE, SPEC_LINE, TAGLINE, META_DESCRIPTION, THESIS_HTML,
-  beatScript, NEED_A, NEED_B, nudgeA, nudgeB,
+  TITLE, TAGLINE, META_DESCRIPTION, AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE,
+  NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA, ASK, CHIP, fieldAlt,
 } from './copy';
 
-const allCopy = (): string => {
-  const s: string[] = [TITLE, SPEC_LINE, TAGLINE, META_DESCRIPTION, THESIS_HTML, nudgeA(1), nudgeB(1)];
-  for (const reduced of [false, true]) {
-    for (const b of Object.values(beatScript(reduced))) {
-      s.push(b.kick, b.prompt.line, b.prompt.sub, b.payoff.line, b.payoff.sub);
-    }
-  }
-  return s.join('\n');
-};
+const allCopy = (): string => [
+  TITLE, TAGLINE, META_DESCRIPTION, AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE,
+  NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA,
+  ...Object.values(ASK),
+  CHIP.thesis, CHIP.learning, CHIP.moved, CHIP.empty, CHIP.allRipe, CHIP.noneRipe,
+  CHIP.missed(1, 7), CHIP.count(7, 4),
+  fieldAlt(7, CHIP.count(7, 4)),
+].join('\n');
 
-describe('locked strings (spec §12.1)', () => {
-  it('ships the locked title block, with no English descriptor bolted on', () => {
+describe('the shipped strings', () => {
+  it('ships the title and tagline', () => {
     expect(TITLE).toBe('By Example');
-    expect(SPEC_LINE).toBe('2→8→1 MLP · tanh · gradient descent');
-  });
-
-  it('ships the locked tagline, with the meta appendix', () => {
-    expect(TAGLINE).toBe('Drop labeled points. Watch a machine find the rule.');
-    expect(META_DESCRIPTION).toBe(
-      'Drop labeled points. Watch a machine find the rule. A real 2→8→1 neural net, trained live in your browser.',
-    );
+    expect(TAGLINE).toBe('Tap anywhere. It figures out the rule.');
+    expect(META_DESCRIPTION.startsWith(TAGLINE)).toBe(true);
   });
 
   it('never ships the retired working title — that string is the collision', () => {
@@ -32,61 +25,75 @@ describe('locked strings (spec §12.1)', () => {
     expect(allCopy().toLowerCase()).not.toContain('teachable');
   });
 
-  it('keeps the anti-cliché guardrails (spec §0)', () => {
-    expect(allCopy()).not.toMatch(/🤖|magic|magical|neural magic|AI-powered/i);
+  it('keeps the anti-cliché guardrails', () => {
+    expect(allCopy()).not.toMatch(/🤖|magic|magical|AI-powered/i);
   });
 });
 
-describe('thesis discipline (spec §12.1)', () => {
-  it('the thesis generalises exactly once, and lives only in the thesis', () => {
-    expect(THESIS_HTML).toContain('You give the examples.');
-    expect(THESIS_HTML).toContain('That’s all training is.');
-    for (const reduced of [false, true]) {
-      for (const b of Object.values(beatScript(reduced))) {
-        for (const line of [b.prompt.line, b.prompt.sub, b.payoff.line, b.payoff.sub]) {
-          expect(line).not.toContain('all training is');
-        }
-      }
-    }
+/*
+  The two highest-leverage corrections ticket 11 measured. The Y axis said `how firm`, so
+  the seeds asserted *firm = ripe* — contradicting the one thing a first-timer knows about
+  fruit. And the glyph must stay `→`: the label renders rotate(-90deg), which maps the
+  text's own +x onto screen-up, so `→` RENDERS as an up arrow and `↑` would point left.
+*/
+describe('the axes', () => {
+  it('says how soft, never how firm', () => {
+    expect(AXIS_Y).toContain('how soft');
+    expect(allCopy().toLowerCase()).not.toContain('how firm');
   });
 
-  it('none of the shipped chrome spends the thesis', () => {
-    for (const s of [TITLE, SPEC_LINE, TAGLINE, META_DESCRIPTION]) {
-      expect(s).not.toContain('all training is');
-    }
+  it('uses → on BOTH axes — the rotated label makes ↑ render pointing left', () => {
+    expect(AXIS_X).toBe('how sweet →');
+    expect(AXIS_Y).toBe('how soft →');
+    expect(allCopy()).not.toContain('↑');
   });
 });
 
-describe('the beat script (spec §4.2)', () => {
-  const script = beatScript(false);
+describe('the status chip does the on-ramp the tour used to do', () => {
+  it('opens as the thesis, so the screen says what it is inside 3 seconds', () => {
+    expect(CHIP.thesis).toBe('tap anywhere. it figures out the rule.');
+  });
 
-  it('runs three beats, each prompt → payoff', () => {
-    expect(Object.keys(script)).toEqual(['beat1', 'beat2', 'beat3']);
-    for (const b of Object.values(script)) {
-      expect(b.prompt.line.length).toBeGreaterThan(0);
-      expect(b.payoff.line.length).toBeGreaterThan(0);
+  it('reports what CHANGED, not a self-graded score', () => {
+    expect(CHIP.moved).toBe('moved the line');
+    expect(CHIP.count(7, 4)).toBe('7 peaches · 4 ripe');
+    expect(CHIP.missed(1, 7)).toBe("can't fit 1 of your 7");
+    expect(allCopy()).not.toMatch(/gets (all )?\d* ?(of \d+ )?right/);
+  });
+
+  it('names the noun everywhere the user is asked to act', () => {
+    expect(ASK.rest).toContain('peach');
+    expect(CHIP.empty).toContain('peach');
+  });
+
+  it('answers instead of doing nothing when a label is pressed with nothing armed', () => {
+    expect(ASK.needPoint).toBe('tap the field first — then say which it is');
+  });
+});
+
+describe('accessible text', () => {
+  it('the field states the whole key path, since it is the only way in without a pointer', () => {
+    for (const k of ['Arrow', 'Enter', 'Escape', 'how sweet', 'how soft']) {
+      expect(FIELD_ARIA).toContain(k);
     }
   });
 
-  it('substitutes the live example count into Beat 1’s payoff', () => {
-    expect(script.beat1.payoff.line).toContain('{n}');
-    expect(script.beat1.payoff.line.replace('{n}', '6')).toBe(
-      'That’s the whole dataset — 6 points and two labels.',
-    );
+  it('the picture has a real description — count, both axes, the boundary, the status', () => {
+    const alt = fieldAlt(7, CHIP.count(7, 4));
+    expect(alt).toContain('7 labelled peaches');
+    expect(alt).toContain('how sweet');
+    expect(alt).toContain('how soft');
+    expect(alt).toContain('boundary');
+    expect(alt).toContain('7 peaches · 4 ripe');
   });
 
-  it('adapts Beat 2 under reduced motion — never describe an animation never seen', () => {
-    const motion = beatScript(false).beat2.prompt.sub;
-    const reduced = beatScript(true).beat2.prompt.sub;
-    expect(motion).not.toBe(reduced);
-    expect(motion).toMatch(/running live|fills in/);
-    expect(reduced).not.toMatch(/running live|fills in|bends/);
-    expect(reduced).toContain('the curve records the whole descent');
+  it('the net caption is explained, not an undefined acronym', () => {
+    expect(NET_CAPTION).toBe('2 in → 8 → 1 guess');
+    expect(NET_CAPTION).not.toContain('MLP');
   });
 
-  it('gates Beat 1 at three of each class', () => {
-    expect([NEED_A, NEED_B]).toEqual([3, 3]);
-    expect(nudgeA(2)).toContain('(2/3)');
-    expect(nudgeB(1)).toContain('(1/3)');
+  it('reset is called reset — it re-seeds the same six, so it is not "start over"', () => {
+    expect(RESET).toBe('reset');
+    expect(UNDO).toBe('undo');
   });
 });

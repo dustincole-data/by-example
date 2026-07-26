@@ -1,19 +1,39 @@
 /**
- * The confidence field (spec §5): forward-pass the net over a coarse grid each epoch,
- * paint it as ImageData, upscale it, and trace the p=0.5 contour with marching squares.
- * ~5–9 ms/epoch in canvas 2D — no WebGL.
+ * The confidence field: forward-pass the net over a coarse grid, paint it as ImageData,
+ * upscale it, and trace the p=0.5 contour with marching squares. Canvas 2D, no WebGL.
+ *
+ * Two things here exist because of what ticket 08 measured on a phone:
+ *  - the grid resolution is a PARAMETER. The settle runs at GRID_LO and only its final
+ *    frame at GRID_HI, because computeField is 4× cheaper at 64² and contourSegs walks
+ *    4× fewer cells — and 64² upscaled is indistinguishable while it moves.
+ *  - the Y range is DERIVED from the box aspect (`syncDomain`), so a pixel means the same
+ *    number of domain units on both axes. The square domain stretched onto a 390×648 box
+ *    rendered a true 45° boundary at 59°: the picture asserted that softness dominated
+ *    when the model weighs the two inputs about equally.
  */
 import { forward } from './net';
 import { fieldColor } from './palette';
 import type { Net } from './types';
 
-/** Coarse grid — upsampled to the canvas. Cheap enough to repaint every epoch. */
-export const GW = 176;
-export const GH = 132;
+/** Field resolution during a settle (motion) and at rest (the still). */
+export const GRID_LO = 64;
+export const GRID_HI = 128;
 
-/** Input-space extent. */
-export const XR: [number, number] = [-1.15, 1.15];
-export const YR: [number, number] = [-1.15, 1.15];
+/** Input-space extent. X is fixed; Y follows the box (see `syncDomain`). */
+export const XR: readonly [number, number] = [-1.15, 1.15];
+export let YR: [number, number] = [-1.15, 1.15];
+
+/**
+ * Re-derive the Y range from the field box so one pixel spans the same number of domain
+ * units on both axes. Returns true when the domain actually changed (i.e. the field cache
+ * is stale). Also the reset used by tests: `syncDomain(1, 1)` restores the square domain.
+ */
+export function syncDomain(boxW: number, boxH: number): boolean {
+  const half = 1.15 * (boxW > 0 && boxH > 0 ? boxH / boxW : 1);
+  if (Math.abs(half - YR[1]) < 1e-3) return false;
+  YR = [-half, half];
+  return true;
+}
 
 /** Input space → normalized view coords (y flipped so +y is up). */
 export const nx = (x: number): number => (x - XR[0]) / (XR[1] - XR[0]);
@@ -23,21 +43,47 @@ export const ny = (y: number): number => 1 - (y - YR[0]) / (YR[1] - YR[0]);
 export const vx = (u: number): number => XR[0] + u * (XR[1] - XR[0]);
 export const vy = (v: number): number => YR[0] + (1 - v) * (YR[1] - YR[0]);
 
-export function computeField(w: Net): Float32Array {
-  const P = new Float32Array(GW * GH);
-  for (let gy = 0; gy < GH; gy++) {
-    const yv = YR[0] + (1 - (gy + 0.5) / GH) * (YR[1] - YR[0]);
-    for (let gx = 0; gx < GW; gx++) {
-      const xv = XR[0] + ((gx + 0.5) / GW) * (XR[1] - XR[0]);
-      P[gy * GW + gx] = forward(w, [xv, yv]).p;
+export function computeField(w: Net, n: number): Float32Array {
+  const P = new Float32Array(n * n);
+  for (let gy = 0; gy < n; gy++) {
+    const yv = YR[0] + (1 - (gy + 0.5) / n) * (YR[1] - YR[0]);
+    for (let gx = 0; gx < n; gx++) {
+      const xv = XR[0] + ((gx + 0.5) / n) * (XR[1] - XR[0]);
+      P[gy * n + gx] = forward(w, [xv, yv]).p;
     }
   }
   return P;
 }
 
+/** The class map — which side of the boundary each cell is on. Compared before/after a
+ *  settle to answer the only interesting question: did the line actually move? */
+export function signOf(P: Float32Array): Uint8Array {
+  const s = new Uint8Array(P.length);
+  for (let i = 0; i < P.length; i++) s[i] = P[i]! >= 0.5 ? 1 : 0;
+  return s;
+}
+
+/**
+ * The ceiling on displayed confidence — the single number that keeps the example marks
+ * readable (ticket 08, engine finding 2). A settled mark always sits in the region that
+ * AGREES with it, so it is always on ground of its own hue, and saturation does not appear
+ * in the WCAG contrast formula at all: only luminance can separate them. At the old cap
+ * (0.78, with bloomAlpha 0.2) the marks measured 1.17:1 orange / 1.52:1 teal, and the best
+ * achievable contrast for ANY mark colour — including pure white — was 2.6:1. No mark
+ * treatment could have passed; the ground itself had to come down.
+ *
+ * Orange is the binding class (`#ff9a52` is the dimmer mark), so any later increase to
+ * FIELD_MAX or LOOK.bloomAlpha breaks the 3:1 gate on the orange side first. Re-sample on
+ * a USED field before shipping such a change — at the seeds it reads a false pass, because
+ * the bloom is a blurred pass and only a used field has bright neighbours.
+ */
+export const FIELD_MAX = 0.4;
+
 export function fieldToImage(P: Float32Array, out: Uint8ClampedArray, gamma?: number): void {
-  for (let i = 0; i < GW * GH; i++) {
-    const c = fieldColor(P[i]!, gamma);
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i]!;
+    const conf = Math.min(Math.abs(p - 0.5) * 2, FIELD_MAX);
+    const c = fieldColor(p < 0.5 ? 0.5 - conf / 2 : 0.5 + conf / 2, gamma);
     const o = i * 4;
     out[o] = c[0] | 0;
     out[o + 1] = c[1] | 0;
@@ -46,22 +92,27 @@ export function fieldToImage(P: Float32Array, out: Uint8ClampedArray, gamma?: nu
   }
 }
 
+/** A boundary segment in NORMALIZED 0..1 box coords. */
 export type Seg = [[number, number], [number, number]];
 
-/** Marching squares over the grid at iso = 0.5 → the decision line, in grid coords. */
-export function contourSegs(P: Float32Array): Seg[] {
+/**
+ * Marching squares over the grid at iso = 0.5 → the decision line. Segments come back
+ * normalized, so a ghost captured at 128² still draws correctly over a field being
+ * recomputed at 64².
+ */
+export function contourSegs(P: Float32Array, n: number): Seg[] {
   const segs: Seg[] = [];
   const iso = 0.5;
-  const at = (gx: number, gy: number): number => P[gy * GW + gx]!;
+  const at = (gx: number, gy: number): number => P[gy * n + gx]!;
   const ipt = (
     x1: number, y1: number, v1: number,
     x2: number, y2: number, v2: number,
   ): [number, number] => {
     const t = (iso - v1) / (v2 - v1);
-    return [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t];
+    return [(x1 + (x2 - x1) * t) / n, (y1 + (y2 - y1) * t) / n];
   };
-  for (let gy = 0; gy < GH - 1; gy++) {
-    for (let gx = 0; gx < GW - 1; gx++) {
+  for (let gy = 0; gy < n - 1; gy++) {
+    for (let gx = 0; gx < n - 1; gx++) {
       const tl = at(gx, gy), tr = at(gx + 1, gy), br = at(gx + 1, gy + 1), bl = at(gx, gy + 1);
       const ci = (tl > iso ? 8 : 0) | (tr > iso ? 4 : 0) | (br > iso ? 2 : 0) | (bl > iso ? 1 : 0);
       if (ci === 0 || ci === 15) continue;
