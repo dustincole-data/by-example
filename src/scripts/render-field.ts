@@ -39,6 +39,8 @@ export interface FieldState {
   dropT0: number | null;
   /** The keyboard crosshair — only while the field itself has focus. */
   cursor: readonly [number, number] | null;
+  /** The point a mouse is hovering. Null on touch and while a drag is live. */
+  probe: readonly [number, number] | null;
   /** Reduced motion: the boundary BEFORE this example, in normalized coords. */
   ghost: readonly Seg[] | null;
 }
@@ -250,8 +252,9 @@ export function createFieldRenderer(): FieldRenderer {
 
     // The keyboard crosshair. Only drawn while the field has focus, so it never competes
     // with the pointer path.
-    if (s.cursor && !s.pending) {
-      const px = nx(s.cursor[0]) * W, py = ny(s.cursor[1]) * H;
+    const mark2 = s.cursor ?? s.probe;
+    if (mark2 && !s.pending) {
+      const px = nx(mark2[0]) * W, py = ny(mark2[1]) * H;
       ctx.save();
       ctx.strokeStyle = 'rgba(76,201,240,0.85)';
       ctx.lineWidth = 1.2;

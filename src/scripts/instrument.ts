@@ -201,6 +201,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
       reduced,
       pending, editing, dropT0,
       cursor: focused && cursor ? cursor : null,
+      probe,
       ghost,
     };
   }
