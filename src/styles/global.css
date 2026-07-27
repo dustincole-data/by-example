@@ -370,6 +370,12 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
      resting line, arming nudges the label pair down a pixel mid-gesture. */
   .askrow { min-height: 26px; margin-bottom: 12px; }
   .lab { height: 54px; font-size: 17px; }
+  /* Ticket 14 final-review fix: .explain + .presetrow added height the rail didn't
+     have room for on ~1366×640-class laptop windows (a maximized-but-not-huge
+     browser leaves less than the full 768 the field-ar cap assumes). Tighter here
+     only — mobile keeps its original spacing. */
+  .explain { margin-bottom: 4px; }
+  .presetrow { margin-top: 4px; }
 
   /* The strip becomes a block: the net gets the room the phone could not give it, and
      the reset sits beside its caption instead of at the end of a queue. */
