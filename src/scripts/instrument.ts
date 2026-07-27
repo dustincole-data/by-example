@@ -62,7 +62,10 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
 
   /* ── state ───────────────────────────────────────────────────────── */
   let net: Net = initNet(SEED);
-  let presetKey: PresetKey = 'straight';
+  // presetEl's own initial value is the source of truth (its options are generated from
+  // PRESETS, and the default-selected option is PRESETS[0] = 'straight') — read it once
+  // instead of a second, independently-hardcoded literal.
+  let presetKey: PresetKey = presetEl.value as PresetKey;
   let data: Point[] = [];
   /** Bumped on every weight change, so the field's grid cache can never go stale. */
   let modelGen = 0;
@@ -369,13 +372,20 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
 
   presetEl.addEventListener('change', () => {
     presetKey = presetEl.value as PresetKey;
+    // Disarm any undo in flight BEFORE reseeding: undoSnap holds a snapshot of the preset
+    // that was active before it was armed, and reseed() below builds the NEW preset's data.
+    // Leaving undoSnap set would let the undo button restore a different pattern than the
+    // one now selected in the dropdown — same desync `reset`'s own undo window would hit
+    // if left alone (final review, Important #2).
+    undoSnap = null;
+    undoUntil = 0;
     reseed();
     syncChrome();
   });
 
-  /* `reset` re-seeds the same six, so it is a reset, not "start over" — and it is one
-     unconfirmed tap in the right-thumb landing zone that wipes everything. Undo, not a
-     confirmation dialog. */
+  /* `reset` re-seeds whichever preset is currently selected, so it is a reset, not "start
+     over" — and it is one unconfirmed tap in the right-thumb landing zone that wipes
+     everything. Undo, not a confirmation dialog. */
   overBtn.addEventListener('click', () => {
     if (undoOpen()) {
       const s = undoSnap!;
