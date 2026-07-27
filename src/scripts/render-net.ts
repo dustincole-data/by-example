@@ -11,7 +11,7 @@
  * Every size rule below is written to return the phone's EXACT previous geometry at
  * NH = 30 / NW = 74; the desktop size is the only thing that moves.
  */
-import { forward, HID } from '../lib/net';
+import { forward, widthOf } from '../lib/net';
 import { clamp } from '../lib/prng';
 import { LOOK } from '../lib/palette';
 import type { Net } from '../lib/types';
@@ -32,9 +32,10 @@ export function drawNet(
   ctx.clearRect(0, 0, NW, NH);
 
   const labelled = NW >= LABEL_AT_PX;
+  const H = widthOf(w);
   // The slope is the phone's; only the ceiling lifts, and it is set by how many hidden
   // nodes have to stack in NH without touching.
-  const R = clamp(NH / 11, 2.4, Math.max(5.4, NH / (HID * 2.6)));
+  const R = clamp(NH / 11, 2.4, Math.max(5.4, NH / (H * 2.6)));
   const k = clamp(NH / 30, 1, 1.9);
   const pad = R + 2.5;
   // Labelled, the first column shifts right to open a gutter for the input names.
@@ -54,12 +55,12 @@ export function drawNet(
   };
 
   for (let i = 0; i < 2; i++) {
-    for (let j = 0; j < HID; j++) {
-      drawEdge(colX[0]!, ypos(2, i), colX[1]!, ypos(HID, j), w.W1[j]![i]!);
+    for (let j = 0; j < H; j++) {
+      drawEdge(colX[0]!, ypos(2, i), colX[1]!, ypos(H, j), w.W1[j]![i]!);
     }
   }
-  for (let j = 0; j < HID; j++) {
-    drawEdge(colX[1]!, ypos(HID, j), colX[2]!, ypos(1, 0), w.W2[j]!);
+  for (let j = 0; j < H; j++) {
+    drawEdge(colX[1]!, ypos(H, j), colX[2]!, ypos(1, 0), w.W2[j]!);
   }
 
   const node = (x: number, y: number, act: number, warm: boolean): void => {
@@ -74,7 +75,7 @@ export function drawNet(
   };
 
   for (let i = 0; i < 2; i++) node(colX[0]!, ypos(2, i), clamp(Math.abs(sampleX[i]!), 0, 1), sampleX[i]! >= 0);
-  for (let j = 0; j < HID; j++) node(colX[1]!, ypos(HID, j), a1[j]!, a1[j]! >= 0);
+  for (let j = 0; j < H; j++) node(colX[1]!, ypos(H, j), a1[j]!, a1[j]! >= 0);
   node(colX[2]!, ypos(1, 0), Math.abs(p - 0.5) * 2, p >= 0.5);
 
   // The two input nodes are the two axes of the field beside this. Saying so is the whole

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SETTLE_MS, EPOCH_RATE, SETTLE_EPOCHS, epochsBy, MOVED_FRAC } from './pacing';
-import { initNet, step, SEED, LR } from './net';
+import { initNet, step, SEED, LR, HID_DEFAULT } from './net';
 import { computeField, signOf, GRID_LO } from './field';
 import type { Point } from './types';
 
@@ -50,7 +50,7 @@ describe('MOVED_FRAC — did the boundary actually move?', () => {
     { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 },
   ];
   const flipped = (next: Point[]): number => {
-    const w = initNet(SEED);
+    const w = initNet(SEED, HID_DEFAULT);
     for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, base, LR);
     const before = signOf(computeField(w, GRID_LO));
     for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, next, LR);

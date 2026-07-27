@@ -3,7 +3,7 @@ import {
   computeField, contourSegs, fieldToImage, signOf,
   nx, ny, vx, vy, XR, YR, FIELD_MAX, GRID_LO, GRID_HI,
 } from './field';
-import { initNet, step, SEED, LR } from './net';
+import { initNet, step, SEED, LR, HID_DEFAULT } from './net';
 import { LOOK, SEAM, fieldColor } from './palette';
 import type { Point } from './types';
 
@@ -12,7 +12,7 @@ const twoBlobs: Point[] = [
   { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 },
 ];
 const settled = (epochs = 200) => {
-  const w = initNet(SEED);
+  const w = initNet(SEED, HID_DEFAULT);
   for (let i = 0; i < epochs; i++) step(w, twoBlobs, LR);
   return w;
 };
@@ -54,7 +54,7 @@ describe('fixed square domain', () => {
 describe('confidence field', () => {
   it('evaluates the model over the whole grid, at either resolution', () => {
     for (const n of [GRID_LO, GRID_HI]) {
-      const P = computeField(initNet(SEED), n);
+      const P = computeField(initNet(SEED, HID_DEFAULT), n);
       expect(P).toHaveLength(n * n);
       for (const p of P) {
         expect(p).toBeGreaterThan(0);

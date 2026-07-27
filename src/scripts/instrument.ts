@@ -8,7 +8,7 @@
  * Everything on screen is the real model: the boundary, the status count, and the net
  * diagram's weights and activations are all read off the live network.
  */
-import { initNet, step, metrics, cloneNet, SEED, LR } from '../lib/net';
+import { initNet, step, metrics, cloneNet, SEED, LR, HID_DEFAULT } from '../lib/net';
 import {
   computeField, signOf, nx, ny, vx, vy, XR, YR, GRID_LO, type Seg,
 } from '../lib/field';
@@ -61,7 +61,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   const say = (s: string): string => forPointer(s, canProbe.matches);
 
   /* ── state ───────────────────────────────────────────────────────── */
-  let net: Net = initNet(SEED);
+  let net: Net = initNet(SEED, HID_DEFAULT);
   // presetEl's own initial value is the source of truth (its options are generated from
   // PRESETS, and the default-selected option is PRESETS[0] = 'straight') — read it once
   // instead of a second, independently-hardcoded literal.
@@ -165,7 +165,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     relearn();
   }
   function reseed(): void {
-    net = initNet(SEED);
+    net = initNet(SEED, HID_DEFAULT);
     const preset = PRESETS.find((p) => p.key === presetKey)!;
     data = preset.gen(PRESET_SEED);
     for (let i = 0; i < SEED_EPOCHS; i++) step(net, data, LR);
@@ -360,7 +360,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     editing = -1;
     touched = true;
     if (trained()) relearn();
-    else { net = initNet(SEED); modelGen++; syncChrome(); }
+    else { net = initNet(SEED, HID_DEFAULT); modelGen++; syncChrome(); }
   });
 
   presetEl.addEventListener('change', () => {

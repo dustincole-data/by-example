@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { SEEDS, SEED_EPOCHS, seedPoints } from './seeds';
-import { initNet, forward, step, metrics, SEED, LR } from './net';
+import { initNet, forward, step, metrics, SEED, LR, HID_DEFAULT } from './net';
 
 const settledSeeds = () => {
   const data = seedPoints();
-  const w = initNet(SEED);
+  const w = initNet(SEED, HID_DEFAULT);
   for (let i = 0; i < SEED_EPOCHS; i++) step(w, data, LR);
   return { w, data };
 };

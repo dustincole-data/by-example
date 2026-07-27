@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PRESETS, PRESET_SEED } from './presets';
-import { initNet, step, metrics, SEED, LR } from './net';
+import { initNet, step, metrics, SEED, LR, HID_DEFAULT } from './net';
 import { SEED_EPOCHS } from './seeds';
 
 describe('the preset roster', () => {
@@ -24,7 +24,7 @@ describe('every preset fits cleanly at boot, at the shared SEED_EPOCHS budget', 
   for (const { key, gen } of PRESETS) {
     it(`${key} — 100% train accuracy after SEED_EPOCHS steps`, () => {
       const data = gen(PRESET_SEED);
-      const w = initNet(SEED);
+      const w = initNet(SEED, HID_DEFAULT);
       for (let i = 0; i < SEED_EPOCHS; i++) step(w, data, LR);
       expect(metrics(w, data).correct).toBe(data.length);
     });
