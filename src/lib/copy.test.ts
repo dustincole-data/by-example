@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   TITLE, TAGLINE, META_DESCRIPTION, AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE,
   NET_CAPTION, RESET, UNDO, REMOVE, RM_NOTE, FIELD_ARIA, ASK, CHIP, fieldAlt,
-  BRAND, BRAND_HREF, forPointer, probeText,
+  BRAND, BRAND_HREF, forPointer, probeText, EXPLAIN, PRESET_LABEL, PRESET_PICKER_LABEL,
 } from './copy';
 
 const allCopy = (): string => [
@@ -13,6 +13,7 @@ const allCopy = (): string => [
   CHIP.thesis, CHIP.learning, CHIP.moved, CHIP.empty, CHIP.allRipe, CHIP.noneRipe,
   CHIP.missed(1, 7), CHIP.count(7, 4),
   fieldAlt(7, CHIP.count(7, 4)),
+  EXPLAIN, PRESET_PICKER_LABEL, ...Object.values(PRESET_LABEL),
 ].join('\n');
 
 describe('the shipped strings', () => {
@@ -126,5 +127,31 @@ describe('accessible text', () => {
   it('reset is called reset — it re-seeds the same six, so it is not "start over"', () => {
     expect(RESET).toBe('reset');
     expect(UNDO).toBe('undo');
+  });
+});
+
+describe('the preset picker (ticket 14)', () => {
+  it('labels all three presets, plainly, no ML jargon on screen', () => {
+    expect(PRESET_LABEL.straight).toBe('straight');
+    expect(PRESET_LABEL.crisscross).toBe('crisscross');
+    expect(PRESET_LABEL.surrounded).toBe('surrounded');
+    for (const s of Object.values(PRESET_LABEL)) {
+      expect(s.toLowerCase()).not.toMatch(/xor|blob|moon|mlp/);
+    }
+  });
+
+  it('the picker has a plain-English label', () => {
+    expect(PRESET_PICKER_LABEL).toBe('pattern');
+  });
+});
+
+describe('the persistent explanation (ticket 14)', () => {
+  it('survives past the first tap — it is not the status chip', () => {
+    expect(EXPLAIN).toBe('Each tap teaches it your rule — watch the line move.');
+  });
+
+  it('says click to a mouse, same as every other tap string', () => {
+    expect(forPointer(EXPLAIN, true)).toBe('Each click teaches it your rule — watch the line move.');
+    expect(forPointer(EXPLAIN, false)).toBe(EXPLAIN);
   });
 });

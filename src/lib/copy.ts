@@ -13,6 +13,8 @@
  *    pointing left. Building the arrow literally is a bug.
  */
 
+import type { PresetKey } from './presets';
+
 export const TITLE = 'By Example';
 
 /** The site link, restored on desktop only — the phone shell has no room for it. */
@@ -91,6 +93,22 @@ export const forPointer = (s: string, fine: boolean): string =>
  */
 export const probeText = (p: number): string =>
   `here: ${p >= 0.5 ? LABEL_NOT_RIPE : LABEL_RIPE} · ${Math.round(Math.max(p, 1 - p) * 100)}% sure`;
+
+/**
+ * Ticket 14. The screen's one persistent line — separate from `.chip`, which
+ * gets overwritten by live status the moment you tap. This is the thing Dustin
+ * said was missing entirely: it never changes and never gates behind a step.
+ */
+export const EXPLAIN = 'Each tap teaches it your rule — watch the line move.';
+
+/** The preset picker (ticket 14). Plain words, not the old ML names (xor/blobs/
+ *  moons) — the whole point of ticket 07 was to keep jargon off the screen. */
+export const PRESET_LABEL: Record<PresetKey, string> = {
+  straight: 'straight',
+  crisscross: 'crisscross',
+  surrounded: 'surrounded',
+};
+export const PRESET_PICKER_LABEL = 'pattern';
 
 /** The field is a real control, so it states the whole key path (spec §Accessibility). */
 export const FIELD_ARIA =
