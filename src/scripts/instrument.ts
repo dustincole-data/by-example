@@ -134,9 +134,9 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
    *  example, a relabel and a removal — all three are "the rule changed because you said so". */
   function relearn(): void {
     preSign = trained() ? signOf(computeField(net, GRID_LO)) : null;
+    ghost = drawFieldTo.segs();
+    ghostUntil = performance.now() + GHOST_MS;
     if (reduced) {
-      ghost = drawFieldTo.segs();
-      ghostUntil = performance.now() + GHOST_MS;
       for (let i = 0; i < SETTLE_EPOCHS; i++) step(net, data, LR);
       settleT0 = null;
       afterSettle();
