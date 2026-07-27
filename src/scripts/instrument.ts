@@ -10,7 +10,7 @@
  */
 import { initNet, step, metrics, cloneNet, SEED, LR } from '../lib/net';
 import {
-  computeField, signOf, syncDomain, nx, ny, vx, vy, XR, YR, GRID_LO, type Seg,
+  computeField, signOf, nx, ny, vx, vy, XR, YR, GRID_LO, type Seg,
 } from '../lib/field';
 import { SEED_EPOCHS } from '../lib/seeds';
 import {
@@ -224,14 +224,6 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     if (dropT0 !== null && now - dropT0 >= DROP_MS) dropT0 = null;
 
     const f = fitCanvas(fieldC);
-    if (syncDomain(f.W, f.H)) {
-      drawFieldTo.invalidate();
-      // The seeds are authored against the domain, so a box that only resolves after the
-      // fonts land (or an orientation change before the first tap) re-places them. Never
-      // once the user owns the data — and never mid-gesture, or the mark being placed is
-      // yanked out from under the finger that placed it.
-      if (!touched && !armed()) { reseed(); syncChrome(); }
-    }
     drawFieldTo(f.ctx, f.W, f.H, fieldState());
 
     /* The net diagram reads whatever point is being ASKED about: the hovered point, else
@@ -409,9 +401,6 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   });
 
   /* ── boot ────────────────────────────────────────────────────────── */
-  // Size the box, derive the domain from it, THEN seed into it — otherwise the six seeds
-  // are authored against a square domain the field does not have.
-  syncDomain(fieldC.clientWidth, fieldC.clientHeight);
   reseed();
   syncChrome();
   requestAnimationFrame(frame);

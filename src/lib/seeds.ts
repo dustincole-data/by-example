@@ -7,10 +7,8 @@
  * on sight and ARE the on-ramp: they teach *sweet + soft = ripe*, which is the rule the
  * first-timer already believes about fruit (ticket 08).
  *
- * Authored in the SQUARE domain and stretched onto whatever the live domain is, so the
- * isotropic Y range spreads them down a tall field instead of squashing them into a band.
+ * Authored directly in the fixed square domain (spec §0.1, D0) — no rescaling needed.
  */
-import { YR } from './field';
 import type { Point } from './types';
 
 export const SEEDS: readonly (readonly [number, number, 0 | 1])[] = [
@@ -29,6 +27,5 @@ export const SEEDS: readonly (readonly [number, number, 0 | 1])[] = [
 export const SEED_EPOCHS = 600;
 
 export function seedPoints(pts: readonly (readonly [number, number, 0 | 1])[] = SEEDS): Point[] {
-  const k = YR[1] / 1.15;
-  return pts.map((p) => ({ x: [p[0], p[1] * k] as [number, number], y: p[2] }));
+  return pts.map((p) => ({ x: [p[0], p[1]] as [number, number], y: p[2] }));
 }

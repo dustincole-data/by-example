@@ -1,14 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  computeField, contourSegs, fieldToImage, signOf, syncDomain,
+  computeField, contourSegs, fieldToImage, signOf,
   nx, ny, vx, vy, XR, YR, FIELD_MAX, GRID_LO, GRID_HI,
 } from './field';
 import { initNet, step, SEED, LR } from './net';
 import { LOOK, SEAM, fieldColor } from './palette';
 import type { Point } from './types';
-
-/** YR is module state, so every test starts from the square domain. */
-beforeEach(() => { syncDomain(1, 1); });
 
 const twoBlobs: Point[] = [
   { x: [0.6, 0.5], y: 0 }, { x: [0.8, 0.35], y: 0 },
@@ -34,34 +31,23 @@ describe('input-space ⇆ view mapping', () => {
   });
 });
 
-/*
-  The square domain stretched onto a 390×648 box rendered a true 45° boundary at 59°,
-  while the grid was drawn in square PIXELS — the picture asserted that softness dominated
-  when the model weighs the two inputs about equally (ticket 08, D11).
-*/
-describe('isotropic domain (syncDomain)', () => {
-  const unitsPerPx = (w: number, h: number): [number, number] => {
-    syncDomain(w, h);
-    return [(XR[1] - XR[0]) / w, (YR[1] - YR[0]) / h];
-  };
-
-  it('makes one pixel span the same domain distance on both axes', () => {
-    for (const [w, h] of [[390, 648], [1440, 900], [560, 560], [300, 900]] as [number, number][]) {
-      const [ux, uy] = unitsPerPx(w, h);
-      expect(uy / ux).toBeCloseTo(1, 10);
-    }
-  });
-
-  it('reports whether the domain actually moved, so the field cache is not rebuilt for nothing', () => {
-    syncDomain(390, 648);
-    expect(syncDomain(390, 648)).toBe(false);
-    expect(syncDomain(390, 500)).toBe(true);
-  });
-
-  it('leaves X alone and survives a zero-sized box', () => {
-    syncDomain(0, 0);
+describe('fixed square domain', () => {
+  it('is square and constant', () => {
     expect([XR[0], XR[1]]).toEqual([-1.15, 1.15]);
-    expect(YR[1]).toBeCloseTo(1.15, 10);
+    expect([YR[0], YR[1]]).toEqual([-1.15, 1.15]);
+  });
+
+  it('exports no domain mutator', async () => {
+    const mod = await import('./field');
+    expect('syncDomain' in mod).toBe(false);
+  });
+
+  /* P0-5: seeds baked the domain scale into their stored coordinates, so a rotation
+     re-derived YR and left examples off-field while still training — "7 peaches · 4 ripe"
+     with one mark visible. A constant domain makes that unrepresentable. */
+  it('maps a normalized point to the same input vector regardless of box shape', () => {
+    expect(vx(0.25)).toBeCloseTo(-0.575, 10);
+    expect(vy(0.25)).toBeCloseTo(0.575, 10);
   });
 });
 

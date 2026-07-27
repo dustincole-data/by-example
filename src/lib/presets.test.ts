@@ -1,10 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PRESETS, PRESET_SEED } from './presets';
 import { initNet, step, metrics, SEED, LR } from './net';
 import { SEED_EPOCHS } from './seeds';
-import { syncDomain } from './field';
-
-beforeEach(() => { syncDomain(1, 1); });
 
 describe('the preset roster', () => {
   it('ships straight, crisscross, surrounded — in that easy-to-hard order', () => {

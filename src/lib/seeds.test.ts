@@ -1,9 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { SEEDS, SEED_EPOCHS, seedPoints } from './seeds';
 import { initNet, forward, step, metrics, SEED, LR } from './net';
-import { ny, syncDomain, YR } from './field';
-
-beforeEach(() => { syncDomain(1, 1); });
 
 const settledSeeds = () => {
   const data = seedPoints();
@@ -34,28 +31,5 @@ describe('the six seeds', () => {
     const { w } = settledSeeds();
     expect(forward(w, [0.9, 0.9]).p).toBeLessThan(0.5); // sweet + soft → ripe
     expect(forward(w, [-0.9, -0.9]).p).toBeGreaterThan(0.5); // not sweet + firm → not ripe
-  });
-});
-
-describe('seeds are authored square and stretched into the live domain', () => {
-  it('spreads them down a tall field instead of squashing them into a band', () => {
-    syncDomain(390, 648);
-    const pts = seedPoints();
-    const ys = pts.map((p) => ny(p.x[1]));
-    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.5);
-  });
-
-  it('lands every seed at the same relative position whatever the box aspect', () => {
-    syncDomain(1, 1);
-    const square = seedPoints().map((p) => ny(p.x[1]));
-    for (const [w, h] of [[390, 648], [1440, 900]] as [number, number][]) {
-      syncDomain(w, h);
-      seedPoints().forEach((p, i) => { expect(ny(p.x[1])).toBeCloseTo(square[i]!, 10); });
-    }
-  });
-
-  it('keeps every seed inside the domain', () => {
-    syncDomain(390, 648);
-    for (const p of seedPoints()) expect(Math.abs(p.x[1])).toBeLessThanOrEqual(YR[1]);
   });
 });

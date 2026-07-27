@@ -2,14 +2,14 @@
  * The confidence field: forward-pass the net over a coarse grid, paint it as ImageData,
  * upscale it, and trace the p=0.5 contour with marching squares. Canvas 2D, no WebGL.
  *
- * Two things here exist because of what ticket 08 measured on a phone:
- *  - the grid resolution is a PARAMETER. The settle runs at GRID_LO and only its final
- *    frame at GRID_HI, because computeField is 4× cheaper at 64² and contourSegs walks
- *    4× fewer cells — and 64² upscaled is indistinguishable while it moves.
- *  - the Y range is DERIVED from the box aspect (`syncDomain`), so a pixel means the same
- *    number of domain units on both axes. The square domain stretched onto a 390×648 box
- *    rendered a true 45° boundary at 59°: the picture asserted that softness dominated
- *    when the model weighs the two inputs about equally.
+ * The grid resolution is a PARAMETER (ticket 08): the settle runs at GRID_LO and only its
+ * final frame at GRID_HI, because computeField is 4× cheaper at 64² and contourSegs walks
+ * 4× fewer cells — and 64² upscaled is indistinguishable while it moves.
+ *
+ * The domain is fixed square (spec §0.1, D0) — XR and YR never change. A prior version
+ * derived YR from the box aspect so a pixel spanned the same domain units on both axes;
+ * that made a coordinate's meaning device-dependent, which real units on the axes (§2.2)
+ * cannot tolerate. A square domain on a square plot box (T19) is isotropic by construction.
  */
 import { forward } from './net';
 import { fieldColor } from './palette';
@@ -19,21 +19,11 @@ import type { Net } from './types';
 export const GRID_LO = 64;
 export const GRID_HI = 128;
 
-/** Input-space extent. X is fixed; Y follows the box (see `syncDomain`). */
+/** Input-space extent. Square and CONSTANT — see spec §0.1 (D0). The plot box is drawn
+ *  square at every viewport, so isotropy holds by construction rather than by derivation,
+ *  and a domain coordinate means the same thing on every device. */
 export const XR: readonly [number, number] = [-1.15, 1.15];
-export let YR: [number, number] = [-1.15, 1.15];
-
-/**
- * Re-derive the Y range from the field box so one pixel spans the same number of domain
- * units on both axes. Returns true when the domain actually changed (i.e. the field cache
- * is stale). Also the reset used by tests: `syncDomain(1, 1)` restores the square domain.
- */
-export function syncDomain(boxW: number, boxH: number): boolean {
-  const half = 1.15 * (boxW > 0 && boxH > 0 ? boxH / boxW : 1);
-  if (Math.abs(half - YR[1]) < 1e-3) return false;
-  YR = [-half, half];
-  return true;
-}
+export const YR: readonly [number, number] = [-1.15, 1.15];
 
 /** Input space → normalized view coords (y flipped so +y is up). */
 export const nx = (x: number): number => (x - XR[0]) / (XR[1] - XR[0]);

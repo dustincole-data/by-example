@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SETTLE_MS, EPOCH_RATE, SETTLE_EPOCHS, epochsBy, MOVED_FRAC } from './pacing';
 import { initNet, step, SEED, LR } from './net';
-import { computeField, signOf, syncDomain, GRID_LO } from './field';
+import { computeField, signOf, GRID_LO } from './field';
 import type { Point } from './types';
 
 describe('the settle window', () => {
@@ -50,7 +50,6 @@ describe('MOVED_FRAC — did the boundary actually move?', () => {
     { x: [-0.6, -0.5], y: 1 }, { x: [-0.8, -0.35], y: 1 },
   ];
   const flipped = (next: Point[]): number => {
-    syncDomain(1, 1);
     const w = initNet(SEED);
     for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, base, LR);
     const before = signOf(computeField(w, GRID_LO));
