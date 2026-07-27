@@ -12,12 +12,13 @@ import { initNet, step, metrics, cloneNet, SEED, LR } from '../lib/net';
 import {
   computeField, signOf, syncDomain, nx, ny, vx, vy, XR, YR, GRID_LO, type Seg,
 } from '../lib/field';
-import { SEEDS, SEED_EPOCHS, seedPoints } from '../lib/seeds';
+import { SEED_EPOCHS } from '../lib/seeds';
 import {
   SETTLE_MS, SETTLE_EPOCHS, epochsBy, MOVED_FRAC, MOVED_MS, GHOST_MS, DROP_MS, UNDO_MS,
 } from '../lib/pacing';
 import { clamp } from '../lib/prng';
-import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt, probeText, forPointer } from '../lib/copy';
+import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt, probeText, forPointer, EXPLAIN } from '../lib/copy';
+import { PRESETS, PRESET_SEED, type PresetKey } from '../lib/presets';
 import { forward } from '../lib/net';
 import type { Net, Point } from '../lib/types';
 import { createFieldRenderer, type FieldState } from './render-field';
@@ -43,6 +44,8 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   const probeEl = q<HTMLElement>('.probe');
   const altEl = q<HTMLElement>('.fieldalt');
   const chipEl = q<HTMLElement>('.chip');
+  const explainEl = q<HTMLElement>('.explain');
+  const presetEl = q<HTMLSelectElement>('.preset');
   const askEl = q<HTMLElement>('.ask');
   const rmvBtn = q<HTMLButtonElement>('.rmv');
   const overBtn = q<HTMLButtonElement>('.over');
@@ -59,6 +62,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
 
   /* ── state ───────────────────────────────────────────────────────── */
   let net: Net = initNet(SEED);
+  let presetKey: PresetKey = 'straight';
   let data: Point[] = [];
   /** Bumped on every weight change, so the field's grid cache can never go stale. */
   let modelGen = 0;
@@ -100,6 +104,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   }
 
   function syncChrome(): void {
+    explainEl.textContent = say(EXPLAIN);
     askEl.textContent = say(pending ? ASK.armed : editing >= 0 ? ASK.editing : ASK.rest);
     askEl.classList.toggle('asking', armed());
     rmvBtn.hidden = editing < 0;
@@ -158,7 +163,8 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   }
   function reseed(): void {
     net = initNet(SEED);
-    data = seedPoints(SEEDS);
+    const preset = PRESETS.find((p) => p.key === presetKey)!;
+    data = preset.gen(PRESET_SEED);
     for (let i = 0; i < SEED_EPOCHS; i++) step(net, data, LR);
     touched = false;
     pending = null;
@@ -359,6 +365,12 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     touched = true;
     if (trained()) relearn();
     else { net = initNet(SEED); modelGen++; syncChrome(); }
+  });
+
+  presetEl.addEventListener('change', () => {
+    presetKey = presetEl.value as PresetKey;
+    reseed();
+    syncChrome();
   });
 
   /* `reset` re-seeds the same six, so it is a reset, not "start over" — and it is one
