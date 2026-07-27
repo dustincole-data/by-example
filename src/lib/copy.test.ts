@@ -131,12 +131,15 @@ describe('accessible text', () => {
 });
 
 describe('the preset picker (ticket 14)', () => {
-  it('labels all three presets, plainly, no ML jargon on screen', () => {
+  it('labels all four patterns, plainly, no ML jargon on screen', () => {
     expect(PRESET_LABEL.straight).toBe('straight');
     expect(PRESET_LABEL.crisscross).toBe('crisscross');
     expect(PRESET_LABEL.surrounded).toBe('surrounded');
+    // `moons` ships as the fourth rung's own name (spec §8.3, §4) — it is a shipped label,
+    // not hidden dataset jargon, so it is deliberately not in the banned list below.
+    expect(PRESET_LABEL.moons).toBe('moons');
     for (const s of Object.values(PRESET_LABEL)) {
-      expect(s.toLowerCase()).not.toMatch(/xor|blob|moon|mlp/);
+      expect(s.toLowerCase()).not.toMatch(/xor|blob|mlp/);
     }
   });
 

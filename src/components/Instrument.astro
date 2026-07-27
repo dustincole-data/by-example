@@ -14,7 +14,7 @@ import {
   AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE, NET_CAPTION, RESET, REMOVE, FIELD_ARIA,
   TITLE, BRAND, BRAND_HREF, PRESET_LABEL, PRESET_PICKER_LABEL,
 } from '../lib/copy';
-import { PRESETS } from '../lib/presets';
+import { PATTERN_ORDER } from '../lib/patterns';
 ---
 
 <section class="instrument">
@@ -48,7 +48,7 @@ import { PRESETS } from '../lib/presets';
     <div class="presetrow">
       <label class="presetlabel" for="preset">{PRESET_PICKER_LABEL}</label>
       <select class="preset" id="preset">
-        {PRESETS.map((p) => <option value={p.key}>{PRESET_LABEL[p.key]}</option>)}
+        {PATTERN_ORDER.map((key) => <option value={key}>{PRESET_LABEL[key]}</option>)}
       </select>
     </div>
     <div class="strip">

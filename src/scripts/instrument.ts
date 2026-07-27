@@ -12,13 +12,14 @@ import { initNet, step, metrics, cloneNet, SEED, LR, HID_DEFAULT } from '../lib/
 import {
   computeField, signOf, nx, ny, vx, vy, XR, YR, GRID_LO, type Seg,
 } from '../lib/field';
-import { SEED_EPOCHS } from '../lib/seeds';
 import {
   SETTLE_MS, SETTLE_EPOCHS, epochsBy, MOVED_FRAC, MOVED_MS, GHOST_MS, DROP_MS, UNDO_MS,
 } from '../lib/pacing';
 import { clamp } from '../lib/prng';
 import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt, probeText, forPointer, EXPLAIN } from '../lib/copy';
-import { PRESETS, PRESET_SEED, type PresetKey } from '../lib/presets';
+import { PATTERN_N, PRESET_SEED, samplePattern, type PatternKey } from '../lib/patterns';
+/** T25 deletes this silent pre-fit; 600 matches the old seeds.ts SEED_EPOCHS (spec §3.2). */
+const SEED_EPOCHS = 600;
 import { forward } from '../lib/net';
 import type { Net, Point } from '../lib/types';
 import { createFieldRenderer, type FieldState } from './render-field';
@@ -63,9 +64,9 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   /* ── state ───────────────────────────────────────────────────────── */
   let net: Net = initNet(SEED, HID_DEFAULT);
   // presetEl's own initial value is the source of truth (its options are generated from
-  // PRESETS, and the default-selected option is PRESETS[0] = 'straight') — read it once
-  // instead of a second, independently-hardcoded literal.
-  let presetKey: PresetKey = presetEl.value as PresetKey;
+  // PATTERN_ORDER, and the default-selected option is PATTERN_ORDER[0] = 'straight') —
+  // read it once instead of a second, independently-hardcoded literal.
+  let presetKey: PatternKey = presetEl.value as PatternKey;
   let data: Point[] = [];
   /** Bumped on every weight change, so the field's grid cache can never go stale. */
   let modelGen = 0;
@@ -166,8 +167,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   }
   function reseed(): void {
     net = initNet(SEED, HID_DEFAULT);
-    const preset = PRESETS.find((p) => p.key === presetKey)!;
-    data = preset.gen(PRESET_SEED);
+    data = samplePattern(presetKey, PRESET_SEED, PATTERN_N[presetKey]);
     for (let i = 0; i < SEED_EPOCHS; i++) step(net, data, LR);
     touched = false;
     pending = null;
@@ -364,7 +364,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   });
 
   presetEl.addEventListener('change', () => {
-    presetKey = presetEl.value as PresetKey;
+    presetKey = presetEl.value as PatternKey;
     // Disarm any undo in flight BEFORE reseeding: undoSnap holds a snapshot of the preset
     // that was active before it was armed, and reseed() below builds the NEW preset's data.
     // Leaving undoSnap set would let the undo button restore a different pattern than the

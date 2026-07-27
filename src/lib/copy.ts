@@ -13,7 +13,7 @@
  *    pointing left. Building the arrow literally is a bug.
  */
 
-import type { PresetKey } from './presets';
+import type { PatternKey } from './patterns';
 
 export const TITLE = 'By Example';
 
@@ -103,10 +103,11 @@ export const EXPLAIN = 'Each tap teaches it your rule — watch the line move.';
 
 /** The preset picker (ticket 14). Plain words, not the old ML names (xor/blobs/
  *  moons) — the whole point of ticket 07 was to keep jargon off the screen. */
-export const PRESET_LABEL: Record<PresetKey, string> = {
+export const PRESET_LABEL: Record<PatternKey, string> = {
   straight: 'straight',
   crisscross: 'crisscross',
   surrounded: 'surrounded',
+  moons: 'moons',
 };
 export const PRESET_PICKER_LABEL = 'pattern';
 
