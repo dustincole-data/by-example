@@ -12,8 +12,9 @@
 */
 import {
   AXIS_X, AXIS_Y, LABEL_RIPE, LABEL_NOT_RIPE, NET_CAPTION, RESET, REMOVE, FIELD_ARIA,
-  TITLE, BRAND, BRAND_HREF,
+  TITLE, BRAND, BRAND_HREF, PRESET_LABEL, PRESET_PICKER_LABEL,
 } from '../lib/copy';
+import { PRESETS } from '../lib/presets';
 ---
 
 <section class="instrument">
@@ -35,6 +36,7 @@ import {
   <span class="chip" role="status"></span>
 
   <div class="card">
+    <p class="explain"></p>
     <div class="askrow">
       <span class="ask" role="status"></span>
       <button class="rmv" type="button" hidden>{REMOVE}</button>
@@ -42,6 +44,12 @@ import {
     <div class="pair">
       <button class="lab rest" type="button" data-c="a" data-k="0"><i class="dot"></i>{LABEL_RIPE}</button>
       <button class="lab rest" type="button" data-c="b" data-k="1"><i class="dot"></i>{LABEL_NOT_RIPE}</button>
+    </div>
+    <div class="presetrow">
+      <label class="presetlabel" for="preset">{PRESET_PICKER_LABEL}</label>
+      <select class="preset" id="preset">
+        {PRESETS.map((p) => <option value={p.key}>{PRESET_LABEL[p.key]}</option>)}
+      </select>
     </div>
     <div class="strip">
       <span class="spacer"></span>
