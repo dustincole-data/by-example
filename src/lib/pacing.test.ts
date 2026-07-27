@@ -51,7 +51,11 @@ describe('MOVED_FRAC — did the boundary actually move?', () => {
   ];
   const flipped = (next: Point[]): number => {
     const w = initNet(SEED, HID_DEFAULT);
-    for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, base, LR);
+    // Pre-settle well past one SETTLE_EPOCHS window before taking the "before" snapshot —
+    // at WD=0.002 (spec §3.4) a single 200-epoch settle from a cold net has not converged
+    // yet, so a same-data resettle still shows large movement that is convergence, not
+    // noise. A live session is always this pre-settled by the time a resettle happens.
+    for (let i = 0; i < 2000; i++) step(w, base, LR);
     const before = signOf(computeField(w, GRID_LO));
     for (let i = 0; i < SETTLE_EPOCHS; i++) step(w, next, LR);
     const after = signOf(computeField(w, GRID_LO));

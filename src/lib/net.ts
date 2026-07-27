@@ -22,13 +22,20 @@ export const SEED = 0x7eac;
 export const LR = 1.5;
 
 /**
- * L2 weight decay — REQUIRED by continuous training, and the whole reason this differs
- * from a train-from-scratch engine (ticket 08, engine finding 1). Without it every tap
- * drives |w| up until confidence saturates: the field flattens to two flat poles, the
- * marks vanish into ground of their own colour, and the boundary stops visibly moving.
- * Decay bounds |w|, so tap #20 still bends the line.
+ * L2 weight decay. Reopened by spec §3.4 — the old 0.02 was chosen to stop the field
+ * saturating into two flat poles, a problem the renderer no longer has: the ground is
+ * capped at GROUND_MAX 0.18 and confidence is carried by the iso-contour ladder, not by
+ * saturation (spec §5.1).
+ *
+ * Measured at 0.02 vs 0.002: per-settle shrink 2.3e-3 → 0.548; agency (class-map flip from
+ * one contradicting example) on crisscross 0.030 → 0.080; cells crossing p=0.1 on
+ * crisscross 0 → 299 and on surrounded 0 → 180; `moons` 0.750 at EVERY width → 0.917-0.972.
+ *
+ * 0.0005 buys more agency again but costs the flat `moons` plateau beat 3 is built on.
+ * It is the documented fallback if the §11.4 agency gate fails on device — and the beat-3
+ * numbers must be re-measured before any copy quotes them.
  */
-export const WD = 0.02;
+export const WD = 0.002;
 
 const sig = (z: number): number => 1 / (1 + Math.exp(-z));
 

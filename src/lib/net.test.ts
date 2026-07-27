@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { initNet, forward, step, metrics, cloneNet, SEED, LR, WD, HID_STEPS, HID_DEFAULT, widthOf } from './net';
+import { mulberry32, gauss } from './prng';
+import { computeField } from './field';
 import type { Net, Point } from './types';
 
 const twoBlobs: Point[] = [
@@ -116,9 +118,11 @@ describe('L2 weight decay — required by continuous training', () => {
       while (ran < n) { step(w, twoBlobs, LR); ran++; }
       return maxAbsW(w);
     };
+    // WD=0.002 decays 10x slower than the old 0.02 (spec §3.4), so the fixed point takes
+    // proportionally longer to reach — these checkpoints are scaled up to match.
     const early = at(200);
-    const settled = at(2000);
-    const forever = at(16000);
+    const settled = at(8000);
+    const forever = at(64000);
     expect(settled).toBeLessThan(early); // decay pulls it down…
     expect(Math.abs(forever - settled)).toBeLessThan(1e-3); // …to a fixed point, and holds
     expect(metrics(w, twoBlobs).correct).toBe(twoBlobs.length); // while still fitting
@@ -161,5 +165,28 @@ describe('hidden width is a parameter, not a constant', () => {
   it('keeps the default at 8 and the ladder at 1·2·4·8·16', () => {
     expect(HID_DEFAULT).toBe(8);
     expect([...HID_STEPS]).toEqual([1, 2, 4, 8, 16]);
+  });
+});
+
+describe('weight decay (spec §3.4)', () => {
+  it('is 0.002 — the value that makes the contour ladder drawable', () => {
+    expect(WD).toBe(0.002);
+    expect(Math.pow(1 - LR * WD, 200)).toBeGreaterThan(0.5); // was 2.3e-3
+  });
+
+  /* The ladder gate: at WD=0.02 the model never reaches p<0.1 anywhere on crisscross,
+     so spec §5.2's outermost ring has zero cells to draw. Measured 2026-07-27. */
+  it('lets a settled crisscross model reach past p = 0.1 and p = 0.9', () => {
+    const rnd = mulberry32(0x7eac);
+    const quad: [number, number, 0 | 1][] = [[-0.5, 0.5, 0], [0.5, 0.5, 1], [0.5, -0.5, 0], [-0.5, -0.5, 1]];
+    const data: Point[] = Array.from({ length: 32 }, (_, i) => {
+      const q = quad[i % 4]!;
+      return { x: [q[0] + gauss(rnd) * 0.14, q[1] + gauss(rnd) * 0.14], y: q[2] };
+    });
+    const w = initNet(SEED, 4);
+    for (let i = 0; i < 600; i++) step(w, data, LR);
+    const P = computeField(w, 64);
+    expect(Math.min(...P)).toBeLessThan(0.1);
+    expect(Math.max(...P)).toBeGreaterThan(0.9);
   });
 });
