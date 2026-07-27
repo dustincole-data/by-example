@@ -86,6 +86,10 @@ export function createFieldRenderer(): FieldRenderer {
     ctx.fillRect(0, 0, W, H);
     frameNo++;
 
+    /* T19: the domain is square (spec §0.1), so the box must be too — a square domain
+       on an oblong box renders a true 45° boundary at some other angle. */
+    if (W !== H && import.meta.env.DEV) console.warn(`field box not square: ${W}×${H}`);
+
     /* The marks ARE the thesis — your examples define the rule — so they cannot stay a
        phone's 6.5px on a 970px desktop field, where they read as specks. Anchored so a
        390-wide field is exactly 1.0× (ticket 08's measured size is untouched). */
