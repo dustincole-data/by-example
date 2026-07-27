@@ -124,7 +124,7 @@ describe('accessible text', () => {
     expect(NET_CAPTION).not.toContain('MLP');
   });
 
-  it('reset is called reset — it re-seeds the same six, so it is not "start over"', () => {
+  it('reset is called reset — it re-seeds whichever preset is selected, so it is not "start over"', () => {
     expect(RESET).toBe('reset');
     expect(UNDO).toBe('undo');
   });

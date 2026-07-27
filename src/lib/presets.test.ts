@@ -7,7 +7,7 @@ import { syncDomain } from './field';
 beforeEach(() => { syncDomain(1, 1); });
 
 describe('the preset roster', () => {
-  it('ships straight, crisscross, surrounded - in that easy-to-hard order', () => {
+  it('ships straight, crisscross, surrounded — in that easy-to-hard order', () => {
     expect(PRESETS.map((p) => p.key)).toEqual(['straight', 'crisscross', 'surrounded']);
   });
 
@@ -25,7 +25,7 @@ describe('the preset roster', () => {
 
 describe('every preset fits cleanly at boot, at the shared SEED_EPOCHS budget', () => {
   for (const { key, gen } of PRESETS) {
-    it(`${key} - 100% train accuracy after SEED_EPOCHS steps`, () => {
+    it(`${key} — 100% train accuracy after SEED_EPOCHS steps`, () => {
       const data = gen(PRESET_SEED);
       const w = initNet(SEED);
       for (let i = 0; i < SEED_EPOCHS; i++) step(w, data, LR);
@@ -35,7 +35,7 @@ describe('every preset fits cleanly at boot, at the shared SEED_EPOCHS budget', 
 });
 
 describe('no capacity-wall pattern ships', () => {
-  it('never re-adds moons/curvy - confirmed a capacity wall under this engines decay', () => {
+  it('never re-adds moons/curvy — confirmed a capacity wall under this engine’s decay', () => {
     const keys = PRESETS.map((p) => p.key).join(' ');
     expect(keys).not.toMatch(/moon|curvy/);
   });

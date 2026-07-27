@@ -24,7 +24,7 @@ export const SEEDS: readonly (readonly [number, number, 0 | 1])[] = [
 
 /** Shared with presets.ts: the same silent-fit budget runs whichever pattern is
  *  active. 260 was enough for the original 6 seeds alone; `surrounded` (ticket 14)
- *  needs ~400-600 to reach 100% under this engine's weight decay - measured
+ *  needs ~400-600 to reach 100% under this engine's weight decay — measured
  *  empirically, not derived. */
 export const SEED_EPOCHS = 600;
 

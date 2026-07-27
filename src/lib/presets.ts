@@ -1,12 +1,12 @@
 /**
- * Pattern presets (ticket 14) - three shapes the field can be seeded with, so the
+ * Pattern presets (ticket 14) — three shapes the field can be seeded with, so the
  * toy can show the "a straight line can't do this" range that tickets 07/08 cut
  * along with the buttons Dustin actually complained about.
  *
  * Ported from commit 9fa04c7 (blobs/xor/circles/moons), renamed off ML jargon to
  * stay inside the fruit metaphor, and trimmed to three: `moons` hits a capacity
  * wall under THIS engine's weight decay (WD=0.02, added by ticket 08 for
- * continuous training - the old batch-trained engine didn't have it). Swept
+ * continuous training — the old batch-trained engine didn't have it). Swept
  * 26-5000 epochs and lr 1.5/3.0: plateaus at 82-86% no matter what, the same kind
  * of wall that already got `spiral` cut. Do not re-add without changing HID/WD,
  * which are locked for reasons unrelated to this ticket.
@@ -17,7 +17,7 @@ import type { Point } from './types';
 
 type RawSeed = readonly [number, number, 0 | 1];
 
-/** 2 - the canonical "a line cannot do this" - the hidden layer visibly earns its keep. */
+/** 2 - the canonical "a line cannot do this" — the hidden layer visibly earns its keep. */
 function xorSeeds(seed: number): RawSeed[] {
   const rnd = mulberry32(seed);
   const pts: RawSeed[] = [];
@@ -33,7 +33,7 @@ function xorSeeds(seed: number): RawSeed[] {
   return pts;
 }
 
-/** 3 - one class enclosed by the other - a CLOSED boundary. */
+/** 3 - one class enclosed by the other — a CLOSED boundary. */
 function circleSeeds(seed: number): RawSeed[] {
   const rnd = mulberry32(seed);
   const pts: RawSeed[] = [];
@@ -47,7 +47,7 @@ function circleSeeds(seed: number): RawSeed[] {
 
 export type PresetKey = 'straight' | 'crisscross' | 'surrounded';
 
-/** Fixed seed for every non-default generator's own randomness - reproducible,
+/** Fixed seed for every non-default generator's own randomness — reproducible,
  *  like `SEED` in net.ts. Verified during planning: crisscross fits 32/32,
  *  surrounded fits 36/36, at SEED_EPOCHS=600 with net.SEED=0x7eac init. */
 export const PRESET_SEED = 0x7eac;
