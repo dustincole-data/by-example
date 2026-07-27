@@ -14,3 +14,12 @@ export interface Net {
   W2: number[];
   b2: number;
 }
+
+/** What the readout block shows — spec §6.3. `unseen` is the hero. */
+export interface Score {
+  unseen: number;
+  unseenOf: number;
+  shown: number;
+  shownOf: number;
+  loss: number;
+}
