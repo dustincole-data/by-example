@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SETTLE_MS, EPOCH_RATE, SETTLE_EPOCHS, epochsBy, MOVED_FRAC } from './pacing';
+import {
+  SETTLE_MS, EPOCH_RATE, SETTLE_EPOCHS, epochsBy, MOVED_FRAC, FIT_MS, FIT_EPOCHS, fitEpochsBy,
+} from './pacing';
 import { initNet, step, SEED, LR, HID_DEFAULT } from './net';
 import { computeField, signOf, GRID_LO } from './field';
 import type { Point } from './types';
@@ -70,5 +72,27 @@ describe('MOVED_FRAC — did the boundary actually move?', () => {
 
   it('stays quiet when the same examples simply settle further', () => {
     expect(flipped(base)).toBeLessThanOrEqual(MOVED_FRAC);
+  });
+});
+
+describe('the animated fit (spec §5.5)', () => {
+  it('spends the same epoch budget on screen instead of at t=0', () => {
+    expect(FIT_EPOCHS).toBe(600);
+    expect(FIT_MS).toBe(1500);
+  });
+
+  it('paces epochs by wall clock, so a dropped frame skips epochs and never stretches', () => {
+    expect(fitEpochsBy(0)).toBe(0);
+    expect(fitEpochsBy(FIT_MS / 2)).toBe(FIT_EPOCHS / 2);
+    expect(fitEpochsBy(FIT_MS)).toBe(FIT_EPOCHS);
+    expect(fitEpochsBy(FIT_MS * 3)).toBe(FIT_EPOCHS);
+    expect(fitEpochsBy(-50)).toBe(0);
+  });
+
+  /* 0.004 fired at 16 of 4096 cells and was measured firing three times while the boundary
+     did not visibly move. Measured real moves at WD=0.002: straight 0.297, crisscross
+     0.080, surrounded 0.020, moons 0.011 — so 0.02 sits under every real move. */
+  it('raises the moved threshold above the noise floor', () => {
+    expect(MOVED_FRAC).toBe(0.02);
   });
 });

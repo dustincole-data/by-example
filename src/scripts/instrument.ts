@@ -14,12 +14,11 @@ import {
 } from '../lib/field';
 import {
   SETTLE_MS, SETTLE_EPOCHS, epochsBy, MOVED_FRAC, MOVED_MS, GHOST_MS, DROP_MS, UNDO_MS,
+  FIT_MS, FIT_EPOCHS, fitEpochsBy,
 } from '../lib/pacing';
 import { clamp } from '../lib/prng';
 import { ASK, CHIP, RESET, UNDO, RM_NOTE, fieldAlt, probeText, forPointer, EXPLAIN } from '../lib/copy';
 import { PATTERN_N, PRESET_SEED, samplePattern, type PatternKey } from '../lib/patterns';
-/** T25 deletes this silent pre-fit; 600 matches the old seeds.ts SEED_EPOCHS (spec §3.2). */
-const SEED_EPOCHS = 600;
 import { forward } from '../lib/net';
 import type { Net, Point } from '../lib/types';
 import { createFieldRenderer, type FieldState } from './render-field';
@@ -89,6 +88,13 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   let chipUntil = 0;
   let undoSnap: { data: Point[]; net: Net; touched: boolean } | null = null;
   let undoUntil = 0;
+  /** The animated fit — spec §5.5. Null once it has finished (or under reduced motion,
+   *  where it never starts: the epochs run synchronously in refit() instead). */
+  let fitT0: number | null = null;
+  let fitRan = 0;
+  /** Cumulative epoch counter — the readout block's `epoch` slot (spec §6.3), wired in
+   *  once that block exists. */
+  let epoch = 0;
 
   const trained = (): boolean => data.length > 0;
   const armed = (): boolean => pending !== null || editing >= 0;
@@ -165,10 +171,13 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     dropT0 = performance.now();
     relearn();
   }
-  function reseed(): void {
-    net = initNet(SEED, HID_DEFAULT);
-    data = samplePattern(presetKey, PRESET_SEED, PATTERN_N[presetKey]);
-    for (let i = 0; i < SEED_EPOCHS; i++) step(net, data, LR);
+  const presetData = (key: PatternKey): Point[] => samplePattern(key, PRESET_SEED, PATTERN_N[key]);
+
+  /** Replace the data and START the fit — never run it. Spec §5.5. */
+  function refit(nextData: Point[], hid: number): void {
+    net = initNet(SEED, hid);
+    data = nextData;
+    epoch = 0;
     touched = false;
     pending = null;
     editing = -1;
@@ -176,6 +185,14 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     ghost = null;
     dropT0 = null;
     chipMsg = null;
+    if (reduced) {
+      for (let i = 0; i < FIT_EPOCHS; i++) step(net, data, LR);
+      epoch = FIT_EPOCHS;
+      fitT0 = null;
+    } else {
+      fitT0 = performance.now();
+      fitRan = 0;
+    }
     modelGen++;
     drawFieldTo.invalidate();
   }
@@ -210,6 +227,12 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     requestAnimationFrame(frame);
     const now = performance.now();
 
+    if (fitT0 !== null) {
+      const want = fitEpochsBy(now - fitT0);
+      for (let i = fitRan; i < want; i++) step(net, data, LR);
+      if (want > fitRan) { epoch += want - fitRan; fitRan = want; modelGen++; }
+      if (now - fitT0 >= FIT_MS) { fitT0 = null; syncChrome(); }
+    }
     if (settleT0 !== null) {
       const el = now - settleT0;
       const want = epochsBy(el);
@@ -365,14 +388,14 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
 
   presetEl.addEventListener('change', () => {
     presetKey = presetEl.value as PatternKey;
-    // Disarm any undo in flight BEFORE reseeding: undoSnap holds a snapshot of the preset
-    // that was active before it was armed, and reseed() below builds the NEW preset's data.
+    // Disarm any undo in flight BEFORE refitting: undoSnap holds a snapshot of the preset
+    // that was active before it was armed, and refit() below builds the NEW preset's data.
     // Leaving undoSnap set would let the undo button restore a different pattern than the
     // one now selected in the dropdown — same desync `reset`'s own undo window would hit
     // if left alone (final review, Important #2).
     undoSnap = null;
     undoUntil = 0;
-    reseed();
+    refit(presetData(presetKey), HID_DEFAULT);
     syncChrome();
   });
 
@@ -391,7 +414,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
     }
     undoSnap = { data: data.map((d) => ({ x: [d.x[0], d.x[1]] as [number, number], y: d.y })), net: cloneNet(net), touched };
     undoUntil = performance.now() + UNDO_MS;
-    reseed();
+    refit(presetData(presetKey), HID_DEFAULT);
     syncChrome();
   });
 
@@ -401,7 +424,7 @@ export function mountInstrument(root: HTMLElement, reduced = prefersReducedMotio
   });
 
   /* ── boot ────────────────────────────────────────────────────────── */
-  reseed();
+  refit(presetData(presetKey), HID_DEFAULT);
   syncChrome();
   requestAnimationFrame(frame);
 }

@@ -29,11 +29,34 @@ export const epochsBy = (elapsed: number): number =>
   Math.min(SETTLE_EPOCHS, Math.max(0, Math.round(elapsed * EPOCH_RATE)));
 
 /**
+ * The FIT — spec §5.5. Every pattern change, every helper change, every reset and boot
+ * itself run this on screen. The old silent SEED_EPOCHS = 600 pre-fit is deleted: it made
+ * ≥75% of all training invisible and opened the piece on the answer.
+ *
+ * Measured epochs-to-fit at HID=8, WD=0.002: straight and crisscross by e=50, surrounded
+ * by e=100, moons reaches its 23/24 plateau by e=300. 600 over 1.5 s covers all four with
+ * the interesting part on screen.
+ */
+export const FIT_MS = 1500;
+export const FIT_EPOCHS = 600;
+export const FIT_RATE = FIT_EPOCHS / FIT_MS;
+
+export const fitEpochsBy = (elapsed: number): number =>
+  Math.min(FIT_EPOCHS, Math.max(0, Math.round(elapsed * FIT_RATE)));
+
+/**
  * Fraction of the 64² class map that must flip for the settle to have "moved the line".
  * Cheap, and the honest answer to *what did the machine just learn* — which self-graded
  * training-set accuracy could not give (it read "gets all N right" almost always).
+ *
+ * Reopened by spec §3.5 at WD = 0.002 (T22): the old 0.004 fired at 16 of 4096 cells and
+ * was measured firing three times in a sequence where the boundary never visibly moved.
+ * Measured real flips from one genuinely contradicting example at the new decay: straight
+ * 0.297, crisscross 0.080, surrounded 0.020, moons 0.011 — 0.02 sits below every real move
+ * and above the noise floor. It no longer drives the narrator's headline (spec §7.2); the
+ * unseen-score delta does.
  */
-export const MOVED_FRAC = 0.004;
+export const MOVED_FRAC = 0.02;
 
 /** How long the "moved the line" status holds. */
 export const MOVED_MS = 1700;
