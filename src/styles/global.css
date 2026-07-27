@@ -149,6 +149,11 @@ canvas.fieldcanvas {
   padding: 4px 2px;
 }
 
+/* Ticket 14: the persistent explanation. Static — it never changes and never
+   gates behind a step, unlike the old 3-beat tour. Sits above the ask row so
+   it survives past the first tap instead of being overwritten like .chip is. */
+.explain { margin: 0 0 10px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .lab {
   height: 60px;
@@ -175,6 +180,30 @@ canvas.fieldcanvas {
    it first — disabled it reads as two broken buttons and answers nothing. */
 .lab.rest { color: var(--ink-muted); border-color: #20262f; }
 .lab:active { transform: translateY(1px); }
+
+/* Ticket 14: the pattern picker. A native <select>, deliberately not a 4th
+   loose button — Dustin's original complaint was too many same-weight buttons,
+   and a labelled dropdown reads as a different kind of control from the two
+   ripe/not-ripe action buttons above it. */
+.presetrow { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.presetlabel {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.preset {
+  flex: 1;
+  height: 38px;
+  border-radius: var(--r);
+  border: 1.5px solid var(--chrome-line);
+  background: #171b24;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 0 10px;
+}
 
 .strip {
   display: flex;
