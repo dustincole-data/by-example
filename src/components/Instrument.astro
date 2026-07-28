@@ -48,7 +48,9 @@ import { PATTERN_ORDER } from '../lib/patterns';
     <div class="presetrow">
       <label class="presetlabel" for="preset">{PRESET_PICKER_LABEL}</label>
       <select class="preset" id="preset">
-        {PATTERN_ORDER.map((key) => <option value={key}>{PRESET_LABEL[key]}</option>)}
+        {PATTERN_ORDER.map((key) => (
+          <option value={key} selected={key === 'moons'}>{PRESET_LABEL[key]}</option>
+        ))}
       </select>
     </div>
     <div class="strip">
