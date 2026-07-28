@@ -150,11 +150,23 @@ describe('the preset picker (ticket 14)', () => {
 
 describe('the persistent explanation (ticket 14)', () => {
   it('survives past the first tap — it is not the status chip', () => {
-    expect(EXPLAIN).toBe('Each tap teaches it your rule — watch the line move.');
+    expect(EXPLAIN).toBe(
+      'A small neural net guesses whether a peach is ripe, from how sweet and how soft it is. '
+      + 'Tap the field to add your own and correct it.',
+    );
+  });
+
+  it('says what is being guessed, and what it is guessed from', () => {
+    expect(EXPLAIN.toLowerCase()).toContain('ripe');
+    expect(EXPLAIN.toLowerCase()).toContain('sweet');
+    expect(EXPLAIN.toLowerCase()).toContain('soft');
   });
 
   it('says click to a mouse, same as every other tap string', () => {
-    expect(forPointer(EXPLAIN, true)).toBe('Each click teaches it your rule — watch the line move.');
+    expect(forPointer(EXPLAIN, true)).toBe(
+      'A small neural net guesses whether a peach is ripe, from how sweet and how soft it is. '
+      + 'Click the field to add your own and correct it.',
+    );
     expect(forPointer(EXPLAIN, false)).toBe(EXPLAIN);
   });
 });

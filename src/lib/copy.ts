@@ -98,8 +98,15 @@ export const probeText = (p: number): string =>
  * Ticket 14. The screen's one persistent line — separate from `.chip`, which
  * gets overwritten by live status the moment you tap. This is the thing Dustin
  * said was missing entirely: it never changes and never gates behind a step.
+ *
+ * Also the thing that says what is actually on screen — the axis labels alone
+ * (`AXIS_X`/`AXIS_Y`) never explained what "sweet" and "soft" were FOR. This
+ * spells out the whole picture in one sentence: what's being guessed, what it's
+ * guessed from, and what a tap does.
  */
-export const EXPLAIN = 'Each tap teaches it your rule — watch the line move.';
+export const EXPLAIN =
+  'A small neural net guesses whether a peach is ripe, from how sweet and how soft it is. ' +
+  'Tap the field to add your own and correct it.';
 
 /** The preset picker (ticket 14). Plain words, not the old ML names (xor/blobs/
  *  moons) — the whole point of ticket 07 was to keep jargon off the screen. */
