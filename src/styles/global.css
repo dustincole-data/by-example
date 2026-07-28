@@ -62,6 +62,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .brand, .probe { display: none; }
 
 /* ── the field ────────────────────────────────────────────────────── */
+/* `.chip`'s positioning context: keeps it anchored to the FIELD specifically, so content
+   above the field (the intro) never has to know about it. See Instrument.astro. */
+.fieldstage { position: relative; }
 .fieldwrap { position: relative; flex: 0 0 auto; display: grid; place-items: center; }
 canvas.fieldcanvas {
   display: block;
@@ -148,10 +151,15 @@ canvas.fieldcanvas {
   padding: 4px 2px;
 }
 
-/* Ticket 14: the persistent explanation. Static — it never changes and never
-   gates behind a step, unlike the old 3-beat tour. Sits above the ask row so
-   it survives past the first tap instead of being overwritten like .chip is. */
-.explain { margin: 0 0 10px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+/* The persistent explanation (ticket 14) — static, never gated behind a step. Moved above
+   the field entirely: it is the intro, read before the picture, not chrome underneath it. */
+.explain {
+  margin: 0;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .lab {
@@ -279,18 +287,36 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
   .instrument {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--rail);
-    grid-template-rows: auto auto 1fr auto;
+    /* Row 1 is the intro, spanning both columns; the field pane (col 1) then spans rows
+       2 through the end, same as it spanned 1-through-end before the intro existed. */
+    grid-template-rows: auto auto auto 1fr auto;
     column-gap: var(--gap);
     max-width: calc(
-      var(--gut-l) + var(--field-ar) * (100dvh - 2 * var(--pad) - var(--gut-b))
+      var(--gut-l) + var(--field-ar) * (100dvh - 2 * var(--pad) - var(--gut-b) - var(--intro-h))
       + var(--gap) + var(--rail)
     );
+  }
+  /* Rough estimate of the intro row's rendered height (2 lines at 15px/1.4 + its margin),
+     folded into the max-width formula above so the square field doesn't overshoot the
+     viewport now that it has to share vertical room with the intro. Approximate on purpose
+     — exact accounting is the composition rebuild's job. */
+  :root { --intro-h: 62px; }
+
+  /* Reads as a page-level banner, not rail chrome: full width, above everything. */
+  .fieldstage { display: contents; }
+  .explain {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding: 0;
+    margin: 0 0 20px;
+    font-size: 15px;
+    max-width: 62ch;
   }
 
   /* ── the field pane ── */
   .fieldwrap {
     grid-column: 1;
-    grid-row: 1 / -1;
+    grid-row: 2 / -1;
     flex: none;
     padding: 0 0 var(--gut-b) var(--gut-l);
   }
@@ -324,7 +350,7 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
   .mark {
     position: static;
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 500;
@@ -338,7 +364,7 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
   .chip {
     position: static;
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 3;
     width: auto;
     max-width: none;
     padding: 0;
@@ -361,7 +387,7 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
      call stands: meaning comes from the axes and the gesture, not from more text. */
   .card {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 4;
     align-self: stretch;
     display: flex;
     flex-direction: column;
@@ -375,11 +401,10 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
      resting line, arming nudges the label pair down a pixel mid-gesture. */
   .askrow { min-height: 26px; margin-bottom: 12px; }
   .lab { height: 54px; font-size: 17px; }
-  /* Ticket 14 final-review fix: .explain + .presetrow added height the rail didn't
-     have room for on ~1366×640-class laptop windows (a maximized-but-not-huge
-     browser leaves less than the full 768 the field-ar cap assumes). Tighter here
-     only — mobile keeps its original spacing. */
-  .explain { margin-bottom: 4px; }
+  /* Ticket 14 final-review fix: .presetrow added height the rail didn't have room
+     for on ~1366×640-class laptop windows (a maximized-but-not-huge browser leaves
+     less than the full 768 the field-ar cap assumes). Tighter here only — mobile
+     keeps its original spacing. .explain no longer lives in this column at all. */
   .presetrow { margin-top: 4px; }
 
   /* The strip becomes a block: the net gets the room the phone could not give it, and
@@ -416,7 +441,7 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
   .brand {
     display: block;
     grid-column: 2;
-    grid-row: 4;
+    grid-row: 5;
     align-self: end;
     margin: 16px 0 8px;
     font-family: var(--mono);

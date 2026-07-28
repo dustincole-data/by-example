@@ -23,20 +23,27 @@ import { PATTERN_ORDER } from '../lib/patterns';
        it — an addition, not a mobile design change. -->
   <h1 class="mark">{TITLE}</h1>
 
-  <div class="fieldwrap">
-    <canvas class="fieldcanvas" tabindex="0" role="application" aria-label={FIELD_ARIA}
-      ><p class="fieldalt"></p></canvas
-    >
-    <span class="ax ax-x" aria-hidden="true">{AXIS_X}</span>
-    <span class="ax ax-y" aria-hidden="true">{AXIS_Y}</span>
+  <p class="explain"></p>
+
+  <!-- Groups the field with the status chip that floats over it, so the chip's absolute
+       `top` anchors to the FIELD's own edge and not to whatever now sits above it (the
+       intro). `display: contents` on desktop (global.css) dissolves this box so `.fieldwrap`
+       and `.chip` re-join `.instrument`'s grid as direct items, unchanged from before. -->
+  <div class="fieldstage">
+    <div class="fieldwrap">
+      <canvas class="fieldcanvas" tabindex="0" role="application" aria-label={FIELD_ARIA}
+        ><p class="fieldalt"></p></canvas
+      >
+      <span class="ax ax-x" aria-hidden="true">{AXIS_X}</span>
+      <span class="ax ax-y" aria-hidden="true">{AXIS_Y}</span>
+    </div>
+
+    <!-- A sibling of the field, not a child of it: on the phone it floats over the field
+         exactly as before, and on desktop the same element is the rail's headline. -->
+    <span class="chip" role="status"></span>
   </div>
 
-  <!-- A sibling of the field, not a child of it: on the phone it floats over the field
-       exactly as before, and on desktop the same element is the rail's headline. -->
-  <span class="chip" role="status"></span>
-
   <div class="card">
-    <p class="explain"></p>
     <div class="askrow">
       <span class="ask" role="status"></span>
       <button class="rmv" type="button" hidden>{REMOVE}</button>
