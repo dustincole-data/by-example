@@ -59,7 +59,52 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mark { position: absolute; left: -9999px; margin: 0; font-size: 13px; }
 /* Desktop-only, and display:none rather than off-screen: an invisible LINK would still
    take focus. */
-.brand, .probe { display: none; }
+.probe { display: none; }
+
+/* ── the dustincoledata signature ──────────────────────────────────────────
+   Every width carries it now. Below the desktop grid it is the dc. monogram alone,
+   floated in the field's top-right corner opposite the chip — the same trick, for
+   the same reason: the one-screen shell has no vertical slack to give (it already
+   overflows a 640px-tall phone on its own), so the mark takes no layout height at
+   all rather than making that worse. The aria-label still says the name in full. */
+.brand {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(230, 234, 240, 0.16);
+  text-decoration: none;
+  line-height: 1;
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+.brand:hover { opacity: 1; border-color: rgba(138, 160, 255, 0.5); }
+.brand:focus-visible { outline: 2px solid #8aa0ff; outline-offset: 2px; }
+.brand .dcd-mark-rule, .brand .dcd-mark-words { display: none; }
+
+/* The dc. logo: letters take the mark's ink, the period stays brand blue on every
+   site — it is the one part of the signature that never localises. */
+.dcd-mark-logo { height: 13px; width: 24.7px; flex: none; display: block; color: #e6eaf0; }
+.dcd-mark-dot { fill: #8aa0ff; }
+.dcd-mark-rule { width: 1px; height: 13px; flex: none; background: rgba(230, 234, 240, 0.2); }
+.dcd-mark-words { align-items: baseline; gap: 7px; }
+.dcd-mark-name {
+  font-family: 'Archivo', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 600; font-size: 13px; letter-spacing: -0.01em; color: #e6eaf0;
+}
+.dcd-mark-suffix {
+  font-family: var(--mono);
+  font-weight: 500; font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: #9aa1b0;
+}
 
 /* ── the field ────────────────────────────────────────────────────── */
 /* `.chip`'s positioning context: keeps it anchored to the FIELD specifically, so content
@@ -437,12 +482,14 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
   .rmnote { text-align: left; }
 
   /* The rail's footer line, set on the same baseline as the x-axis label under the field
-     — the two panes get the same foot, so the composition ends once. */
-  /* The bare URL became the dc. signature, so the rail's footer line is now a pill
-     rather than a text link — same slot, same baseline, same one-outbound-link rule. */
+     — the two panes get the same foot, so the composition ends once. Here the mark opens
+     up to the full lockup: the rail has the width the phone does not. */
   .brand {
-    display: inline-flex;
-    align-items: center;
+    position: static;
+    z-index: auto;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     gap: 8px;
     grid-column: 2;
     grid-row: 5;
@@ -450,31 +497,11 @@ canvas.netcanvas { display: block; flex: none; width: 74px; height: 30px; opacit
     justify-self: start;
     margin: 16px 0 8px;
     padding: 7px 12px 7px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(230, 234, 240, 0.16);
-    text-decoration: none;
-    line-height: 1;
-    opacity: 0.85;
     width: max-content;
-    transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
   }
-  .brand:hover { opacity: 1; transform: translateY(-1px); border-color: rgba(138, 160, 255, 0.5); }
-  .brand:focus-visible { outline: 2px solid #8aa0ff; outline-offset: 2px; }
-  /* The dc. logo: letters take the mark's ink, the period stays brand blue on every
-     site — it is the one part of the signature that never localises. */
-  .dcd-mark-logo { height: 13px; width: 24.7px; flex: none; display: block; color: #e6eaf0; }
-  .dcd-mark-dot { fill: #8aa0ff; }
-  .dcd-mark-rule { width: 1px; height: 13px; flex: none; background: rgba(230, 234, 240, 0.2); }
-  .dcd-mark-words { display: inline-flex; align-items: baseline; gap: 7px; }
-  .dcd-mark-name {
-    font-family: 'Archivo', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-    font-weight: 600; font-size: 13px; letter-spacing: -0.01em; color: #e6eaf0;
-  }
-  .dcd-mark-suffix {
-    font-family: var(--mono);
-    font-weight: 500; font-size: 9px; letter-spacing: 0.16em;
-    text-transform: uppercase; color: #9aa1b0;
-  }
+  .brand:hover { transform: translateY(-1px); }
+  .brand .dcd-mark-rule { display: block; }
+  .brand .dcd-mark-words { display: inline-flex; }
 }
 
 @media print { .brand { display: none; } }
